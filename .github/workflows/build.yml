@@ -1,0 +1,81 @@
+
+
+          echo "Current partitions:"
+          sudo fdisk -l "$TARGET" || true
+
+      - name: Download Qubes ISO
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p build
+          cd build
+
+          ISO="Qubes-R${QUBES_VERSION}-x86_64.iso"
+
+          wget -O "$ISO" \
+            "https://mirrors.edge.kernel.org/qubes/iso/${ISO}"
+
+          sha256sum "$ISO"
+
+      - name: Write Qubes installer to target disk
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ISO="build/Qubes-R${QUBES_VERSION}-x86_64.iso"
+
+          if [[ ! -f "$ISO" ]]; then
+            echo "Missing ISO: $ISO"
+            exit 1
+          fi
+
+          echo "About to destroy contents of ${TARGET_DISK}"
+
+          sudo umount ${TARGET_DISK}?* 2>/dev/null || true
+
+          sudo dd if="$ISO" of="${TARGET_DISK}" bs=16M status=progress oflag=direct conv=fsync
+
+          sync
+
+          echo "Qubes installer written successfully."
+
+      - name: Set target disk read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sudo blockdev --setro "${TARGET_DISK}" || true
+
+      - name: Upload scripts artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: qubes-bootstrap-scripts
+          path: |
+            scripts/make-qubes-installer-usb.sh
+            scripts/qubes-dom0-bootstrap.sh
+
+      - name: Final instructions
+        shell: bash
+        run: |
+          cat <<'EOF'
+
+          =====================================================
+          Qubes installer media prepared.
+          =====================================================
+
+          Next steps:
+
+          1. Reboot laptop.
+          2. Boot from the prepared disk.
+          3. Install Qubes OS onto the intended internal storage.
+          4. After first boot into dom0:
+
+             chmod +x qubes-dom0-bootstrap.sh
+             sudo ./qubes-dom0-bootstrap.sh
+
+          5. Reboot Qubes after bootstrap.
+
+          =====================================================
+
+          EOF
