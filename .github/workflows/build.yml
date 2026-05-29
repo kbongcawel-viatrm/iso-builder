@@ -1,18 +1,5 @@
-
-
-          echo "Current partitions:"
-          sudo fdisk -l "$TARGET" || true
-
-      - name: Download Qubes ISO
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          mkdir -p build
-          cd build
-
-          ISO="Qubes-R${QUBES_VERSION}-x86_64.iso"
-
+# Build ISO workflow
+name: qube.s-bootstrap
           wget -O "$ISO" \
             "https://mirrors.edge.kernel.org/qubes/iso/${ISO}"
 
