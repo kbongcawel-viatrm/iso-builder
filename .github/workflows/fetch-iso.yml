@@ -1,0 +1,50 @@
+name: Use verified Qubes ISO
+
+on:
+  workflow_dispatch:
+
+jobs:
+  use-qubes-iso:
+    runs-on: ubuntu-latest
+
+    env:
+      ISO_NAME: Qubes-R4.3.1-rc1-x86_64.iso
+      ISO_URL: https://mirrors.edge.kernel.org/qubes/iso/Qubes-R4.3.1-rc1-x86_64.iso
+      SIG_URL: https://mirrors.edge.kernel.org/qubes/iso/Qubes-R4.3.1-rc1-x86_64.iso.asc
+
+    steps:
+      - name: Download Qubes ISO
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/iso"
+
+          curl --fail --location --show-error \
+            --output "$RUNNER_TEMP/iso/$ISO_NAME" \
+            "$ISO_URL"
+
+      - name: Verify Qubes ISO GPG signature
+        run: |
+          set -euo pipefail
+
+          sudo apt-get update
+          sudo apt-get install -y curl gnupg2 ca-certificates
+
+          curl --fail --location --show-error \
+            --output "$RUNNER_TEMP/iso/$ISO_NAME.asc" \
+            "$SIG_URL"
+
+          curl --fail --location --show-error \
+            --output qubes-release-4.3-signing-key.asc \
+            "https://keys.qubes-os.org/keys/qubes-release-4.3-signing-key.asc"
+
+          gpg2 --batch --import qubes-release-4.3-signing-key.asc
+
+          gpg2 --batch --verify \
+            "$RUNNER_TEMP/iso/$ISO_NAME.asc" \
+            "$RUNNER_TEMP/iso/$ISO_NAME"
+
+      - name: Use ISO in later runtime step
+        run: |
+          ISO_PATH="$RUNNER_TEMP/iso/$ISO_NAME"
+          echo "Verified ISO is available at: $ISO_PATH"
+          ls -lh "$ISO_PATH"
