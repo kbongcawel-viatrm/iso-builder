@@ -45,7 +45,8 @@ jobs:
 
       - name: Use ISO in later runtime step
         run: |
-          VERIFIED_ISO="$RUNNER_TEMP/$ISO_ROOT_DIR/$ISO_NAME"
+          cd $RUNNER_TEMP
+          VERIFIED_ISO="$ISO_ROOT_DIR/$ISO_NAME"
           echo "Verified ISO is available at: $VERIFIED_ISO"
           ls -lh "$VERIFIED_ISO"
       
