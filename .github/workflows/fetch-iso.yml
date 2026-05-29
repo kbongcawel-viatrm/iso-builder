@@ -16,11 +16,10 @@ jobs:
       - name: Download Qubes ISO
         run: |
           set -euo pipefail
-          ISO_PATH="$RUNNER_TEMP/$ISO_ROOT_DIR"
-          mkdir -p $ISO_PATH
-          sudo chown $USER:$USER -R $ISO_PATH/
+          mkdir -p $RUNNER_TEMP/$ISO_ROOT_DIR
+          sudo chown $USER:$USER -R $ISO_ROOT_DIR/
           curl --fail --location --show-error \
-            --output "$RUNNER_TEMP/iso/$ISO_NAME" \
+            --output "$RUNNER_TEMP/$ISO_ROOT_DIR/$ISO_NAME" \
             "$ISO_URL"
 
       - name: Verify Qubes ISO GPG signature
@@ -31,7 +30,7 @@ jobs:
           sudo apt-get install -y curl gnupg2 ca-certificates
 
           curl --fail --location --show-error \
-            --output "$RUNNER_TEMP/iso/$ISO_NAME.asc" \
+            --output "$RUNNER_TEMP/$ISO_ROOT_DIR/$ISO_NAME.asc" \
             "$SIG_URL"
 
           curl --fail --location --show-error \
@@ -41,12 +40,12 @@ jobs:
           gpg2 --batch --import qubes-release-4.3-signing-key.asc
 
           gpg2 --batch --verify \
-            "$RUNNER_TEMP/iso/$ISO_NAME.asc" \
-            "$RUNNER_TEMP/iso/$ISO_NAME"
+            "$RUNNER_TEMP/$ISO_ROOT_DIR/$ISO_NAME.asc" \
+            "$RUNNER_TEMP/$ISO_ROOT_DIR/$ISO_NAME"
 
       - name: Use ISO in later runtime step
         run: |
-          VERIFIED_ISO="$RUNNER_TEMP/$ISO_PATH_NAME/$ISO_NAME"
+          VERIFIED_ISO="$RUNNER_TEMP/$ISO_ROOT_DIR/$ISO_NAME"
           echo "Verified ISO is available at: $VERIFIED_ISO"
           ls -lh "$VERIFIED_ISO"
       
