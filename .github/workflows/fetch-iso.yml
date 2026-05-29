@@ -11,13 +11,14 @@ jobs:
       ISO_NAME: Qubes-R4.3.1-rc1-x86_64.iso
       ISO_URL: https://mirrors.edge.kernel.org/qubes/iso/Qubes-R4.3.1-rc1-x86_64.iso
       SIG_URL: https://mirrors.edge.kernel.org/qubes/iso/Qubes-R4.3.1-rc1-x86_64.iso.asc
-
+      ISO_ROOT_DIR: iso
     steps:
       - name: Download Qubes ISO
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/iso"
-
+          ISO_PATH="$RUNNER_TEMP/$ISO_ROOT_DIR"
+          mkdir -p $ISO_PATH
+          sudo chown $USER:$USER -R $ISO_PATH/
           curl --fail --location --show-error \
             --output "$RUNNER_TEMP/iso/$ISO_NAME" \
             "$ISO_URL"
@@ -45,6 +46,13 @@ jobs:
 
       - name: Use ISO in later runtime step
         run: |
-          ISO_PATH="$RUNNER_TEMP/iso/$ISO_NAME"
-          echo "Verified ISO is available at: $ISO_PATH"
-          ls -lh "$ISO_PATH"
+          VERIFIED_ISO="$RUNNER_TEMP/$ISO_PATH_NAME/$ISO_NAME"
+          echo "Verified ISO is available at: $VERIFIED_ISO"
+          ls -lh "$VERIFIED_ISO"
+      
+      - name: Upload verified ISO artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: verified-qubes-iso
+          path: $VERIFIED_ISO
+
