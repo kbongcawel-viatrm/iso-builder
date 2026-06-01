@@ -8,7 +8,6 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      TAIL_SCALE_INSTALL="curl -fsSL https://tailscale.com/install.sh | sh"
       TAIL_SCALE_DIR="tailscale"
     
     steps:
