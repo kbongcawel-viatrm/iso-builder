@@ -19,48 +19,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Define Actor
-        id: actor-info
-        run: |
-          # Get the GitHub Actor (i.e., the person running the workflow)
-          if [ -n "${{ github.actor }}" ]; then
-            echo "Actor pre-defined: ${{ github.actor }}"
-            echo "actor=${{ github.actor }}" >> $GITHUB_ENV
-          fi
-
-      - name: Clear cookies for multiple domains
-        env:
-          GITHUB_ACTOR: ${{ github.actor }}
-        run: |
-          # Define domains and then ensure the actor triggers this
-          if [ "$GITHUB_ACTOR" != "${github_actor-request}" reason```
-It seems I didn't complete the explanation earlier. Let me refine the entire workflow again:
-
-### Updated Workflow to Target Specific Actor
-This improved workflow uses the GitHub Actions actor (`GITHUB_ACTOR`) to identify the user who triggered the workflow and ensures the workflow only runs for them.
-
-```yaml
-name: Clear Cookies Per Site
-
-on:
-  workflow_dispatch:
-    inputs:
-      actor:
-        description: 'Actor/Username triggering this workflow'
-        required: false
-
-jobs:
-  clear_cookies_by_actor:
-    runs-on: ubuntu-latest
-
-    permissions:
-      id-token: write
-      contents: read
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
       - name: Verify Actor Permissions
         id: check-actor
         run: |
@@ -85,3 +43,24 @@ jobs:
             # 3. Next request runs with a reset state for that site
             curl -b cookies.txt -c cookies.txt "https://$DOMAIN"
           done
+
+      - name: Generate Cache Refresh Links
+        run: |
+          mkdir -p cache-refresh-scripts
+
+          # Mozilla-based browser cache-clearing link/script
+          echo '#!/bin/bash' > cache-refresh-scripts/refresh-mozilla-cache.sh
+          echo 'rm -rf ~/.mozilla/firefox/*/cache*' >> cache-refresh-scripts/refresh-mozilla-cache.sh
+          chmod +x cache-refresh-scripts/refresh-mozilla-cache.sh
+
+          # Chrome-based browser cache-clearing link/script
+          echo '#!/bin/bash' > cache-refresh-scripts/refresh-chrome-cache.sh
+          echo 'rm -rf ~/.config/google-chrome/Default/Cache*' >> cache-refresh-scripts/refresh-chrome-cache.sh
+          chmod +x cache-refresh-scripts/refresh-chrome-cache.sh
+
+          # Safari-based browser cache-clearing link/script
+          echo '#!/bin/bash' > cache-refresh-scripts/refresh-safari-cache.sh
+          echo 'rm -rf ~/Library/Caches/com.apple.Safari*' >> cache-refresh-scripts/refresh-safari-cache.sh
+          chmod +x cache-refresh-scripts/refresh-safari-cache.sh
+
+          echo "Cache refresh scripts generated for Mozilla, Chrome, and Safari browsers."
