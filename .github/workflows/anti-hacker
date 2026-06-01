@@ -1,0 +1,221 @@
+# Reset the cookies on a daily basis
+name: Reset Tor Browser Data on Tails Linux
+
+on:
+  schedule:
+    # Runs daily at 7:00 AM GMT+8 / Asia/Manila.
+    # GitHub Actions cron is evaluated in UTC, so this is 23:00 UTC.
+    - cron: "0 23 * * *"
+
+  workflow_dispatch:
+    inputs:
+      reset_preferences:
+        description: "Also reset Tor Browser prefs.js and related preference files"
+        required: true
+        default: "true"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+      reset_site_data:
+        description: "Also clear local storage, IndexedDB, cache, permissions, and service workers"
+        required: true
+        default: "true"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+jobs:
+  reset-tor-browser-tails:
+    name: Reset Tor Browser cookies and preferences on Tails
+    runs-on: [self-hosted, tails-os]
+
+    steps:
+      - name: Check Tails/Linux environment
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "User: $(whoami)"
+          echo "Home: $HOME"
+          echo "Kernel: $(uname -a)"
+
+          if [ -f /etc/os-release ]; then
+            cat /etc/os-release
+          fi
+
+          if [ -f /etc/os-release ] && grep -qi "tails" /etc/os-release; then
+            echo "Detected Tails from /etc/os-release."
+          else
+            echo "::warning::This runner does not appear to be Tails based on /etc/os-release."
+            echo "::warning::Continuing anyway because this workflow is Linux-compatible."
+          fi
+
+      - name: Quit Tor Browser
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Trying to close Tor Browser gracefully..."
+
+          pkill -TERM -u "$USER" -f "tor-browser" 2>/dev/null || true
+          pkill -TERM -u "$USER" -f "Tor Browser" 2>/dev/null || true
+          pkill -TERM -u "$USER" -f "firefox.real" 2>/dev/null || true
+
+          sleep 5
+
+          echo "Force-stopping any remaining Tor Browser processes..."
+
+          pkill -KILL -u "$USER" -f "tor-browser" 2>/dev/null || true
+          pkill -KILL -u "$USER" -f "Tor Browser" 2>/dev/null || true
+          pkill -KILL -u "$USER" -f "firefox.real" 2>/dev/null || true
+
+      - name: Locate Tor Browser profile
+        id: profile
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Searching for Tor Browser profile..."
+
+          CANDIDATES=(
+            "$HOME/.tor-browser/profile.default"
+            "$HOME/.tor-browser/profile.default-esr"
+            "$HOME/Browser/TorBrowser/Data/Browser/profile.default"
+            "$HOME/Tor Browser/Browser/TorBrowser/Data/Browser/profile.default"
+            "/home/amnesia/.tor-browser/profile.default"
+            "/home/amnesia/.tor-browser/profile.default-esr"
+          )
+
+          PROFILE_DIR=""
+
+          for candidate in "${CANDIDATES[@]}"; do
+            if [ -d "$candidate" ]; then
+              PROFILE_DIR="$candidate"
+              break
+            fi
+          done
+
+          if [ -z "$PROFILE_DIR" ]; then
+            PROFILE_DIR="$(find "$HOME" /home/amnesia -maxdepth 6 -type d \
+              \( -name "profile.default" -o -name "profile.default-esr" \) \
+              2>/dev/null | grep -E "tor-browser|TorBrowser|Browser" | head -n 1 || true)"
+          fi
+
+          if [ -z "$PROFILE_DIR" ]; then
+            echo "::error::Could not locate a Tor Browser profile directory."
+            echo "Checked common Tails/Tor Browser paths under $HOME and /home/amnesia."
+            exit 1
+          fi
+
+          echo "Found Tor Browser profile: $PROFILE_DIR"
+          echo "profile_dir=$PROFILE_DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Create backup
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PROFILE_DIR="${{ steps.profile.outputs.profile_dir }}"
+          BACKUP_ROOT="$HOME/tor-browser-reset-backups"
+          BACKUP_DIR="$BACKUP_ROOT/backup-$(date -u +%Y%m%d-%H%M%S)"
+
+          mkdir -p "$BACKUP_DIR"
+
+          echo "Creating lightweight backup at: $BACKUP_DIR"
+
+          for item in \
+            "cookies.sqlite" \
+            "cookies.sqlite-shm" \
+            "cookies.sqlite-wal" \
+            "prefs.js" \
+            "user.js" \
+            "permissions.sqlite" \
+            "content-prefs.sqlite" \
+            "webappsstore.sqlite"
+          do
+            if [ -e "$PROFILE_DIR/$item" ]; then
+              cp -a "$PROFILE_DIR/$item" "$BACKUP_DIR/" || true
+            fi
+          done
+
+          echo "Backup complete."
+
+      - name: Clear Tor Browser cookies
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PROFILE_DIR="${{ steps.profile.outputs.profile_dir }}"
+
+          echo "Clearing Tor Browser cookies from: $PROFILE_DIR"
+
+          rm -f "$PROFILE_DIR/cookies.sqlite"
+          rm -f "$PROFILE_DIR/cookies.sqlite-shm"
+          rm -f "$PROFILE_DIR/cookies.sqlite-wal"
+
+          echo "Cookies cleared."
+
+      - name: Clear Tor Browser site data
+        if: ${{ github.event_name == 'schedule' || inputs.reset_site_data == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PROFILE_DIR="${{ steps.profile.outputs.profile_dir }}"
+
+          echo "Clearing Tor Browser site data from: $PROFILE_DIR"
+
+          rm -f "$PROFILE_DIR/webappsstore.sqlite"
+          rm -f "$PROFILE_DIR/webappsstore.sqlite-shm"
+          rm -f "$PROFILE_DIR/webappsstore.sqlite-wal"
+
+          rm -f "$PROFILE_DIR/permissions.sqlite"
+          rm -f "$PROFILE_DIR/permissions.sqlite-shm"
+          rm -f "$PROFILE_DIR/permissions.sqlite-wal"
+
+          rm -f "$PROFILE_DIR/content-prefs.sqlite"
+          rm -f "$PROFILE_DIR/content-prefs.sqlite-shm"
+          rm -f "$PROFILE_DIR/content-prefs.sqlite-wal"
+
+          rm -rf "$PROFILE_DIR/storage/default"
+          rm -rf "$PROFILE_DIR/storage/permanent"
+          rm -rf "$PROFILE_DIR/storage/temporary"
+
+          rm -rf "$PROFILE_DIR/indexedDB"
+          rm -rf "$PROFILE_DIR/cache2"
+          rm -rf "$PROFILE_DIR/startupCache"
+          rm -rf "$PROFILE_DIR/serviceworker"
+          rm -rf "$PROFILE_DIR/sessionstore-backups"
+
+          echo "Site data cleared."
+
+      - name: Reset Tor Browser preferences
+        if: ${{ github.event_name == 'schedule' || inputs.reset_preferences == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PROFILE_DIR="${{ steps.profile.outputs.profile_dir }}"
+
+          echo "Resetting Tor Browser preference files in: $PROFILE_DIR"
+
+          rm -f "$PROFILE_DIR/prefs.js"
+          rm -f "$PROFILE_DIR/user.js"
+
+          echo "Preferences reset."
+
+      - name: Print reset summary
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PROFILE_DIR="${{ steps.profile.outputs.profile_dir }}"
+
+          echo "Reset completed."
+          echo "Profile reset: $PROFILE_DIR"
+          echo "Cookies: cleared"
+          echo "Site data: ${{ github.event_name == 'schedule' || inputs.reset_site_data == 'true' }}"
+          echo "Preferences: ${{ github.event_name == 'schedule' || inputs.reset_preferences == 'true' }}"
