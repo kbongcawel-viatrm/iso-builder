@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       actor:
-        description: 'Actor/Username triggering this workflow'
+        description: 'Actor/Usernametriggering this workflow'
         required: false
 
 jobs:
