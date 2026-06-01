@@ -1,1 +1,22 @@
+name: P2P Network
 
+on:
+  workflow_dispatch:
+
+jobs:
+  install-tailscale:
+    runs-on: ubuntu-latest
+
+    env:
+      TAIL_SCALE_INSTALL="curl -fsSL https://tailscale.com/install.sh | sh"
+      TAIL_SCALE_DIR="tailscale"
+    
+    steps:
+      - name: Download Tailscale
+        run: |
+          set -euo pipefail
+          mkdir -p $RUNNER_TEMP/$TAIL_SCALE_DIR
+          sudo chown $USER:$USER -R $TAIL_SCALE_DIR/
+          curl -fsSL https://tailscale.com/install.sh | sh
+
+          
