@@ -1,8 +1,28 @@
-# 1. First request saves cookies
-curl -c cookies.txt https://example.com
+name: Clear Cookies Per Site
 
-# 2. Reset the site-specific cookies from the jar
-sed -i '/://example.com' cookies.txt
+on:
+  push:
+    branches:
+      - main
 
-# 3. Next request runs with a reset state for that site
-curl -b cookies.txt -c cookies.txt https://example.com
+jobs:
+  run_curl_commands:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Clear cookies for multiple domains
+        run: |
+          DOMAINS=(google.com github.com chatgpt.com uorigin.com mozilla.org)
+          for DOMAIN in "${DOMAINS[@]}"; do
+            # 1. First request saves cookies
+            curl -c cookies.txt "https://$DOMAIN"
+
+            # 2. Reset the site-specific cookies from the jar
+            sed -i "/:\/\/$DOMAIN/d" cookies.txt
+
+            # 3. Next request runs with a reset state for that site
+            curl -b cookies.txt -c cookies.txt "https://$DOMAIN"
+          done
