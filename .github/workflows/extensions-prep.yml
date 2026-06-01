@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  setup_tor_and_extensions:
+  setup_browsers_and_extensions:
     runs-on: ubuntu-latest
 
     permissions:
@@ -20,5 +20,61 @@ jobs:
       - name: Verify Triggering Actor
         id: check-actor
         run: |
-          EXPECTED_ACTOR="kbongcawel-viatrm" # Replace with the correct actor username if needed
-         
+          EXPECTED_ACTOR="kbongcawel-viatrm"
+          echo "Triggering actor: ${{ github.actor }}"
+          
+          if [ "${{ github.actor }}" != "$EXPECTED_ACTOR" ]; then
+            echo "This workflow can only be run by the authorized actor: $EXPECTED_ACTOR."
+            exit 1
+          fi
+          echo "Actor verified."
+
+      # Step 3: Install Dependencies
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl wget xvfb firefox-esr zip unzip chromium-browser
+
+      # Step 4: Download and prepare Mozilla browser with presets
+      - name: Prepare Mozilla Browser with Extensions and Filters
+        run: |
+          mkdir -p browsers/mozilla
+          
+          # Simulate Mozilla preparation with extensions:
+          echo "Installing Leakquidator, NoScript, and AdGuard into Mozilla preset."
+          echo "rules: optimal security" > browsers/mozilla/security-preset.txt
+          
+          # Download a base browser (replace with actual source if available)
+          echo "Base Mozilla browser downloaded." > browsers/mozilla/base.txt
+          
+          # Pack into a zip file
+          zip -r browsers/mozilla-browser.zip browsers/mozilla
+          echo "Mozilla browser prepared and zipped."
+
+      # Step 5: Download and prepare Chrome browser with presets
+      - name: Prepare Chrome Browser with Extensions and Filters
+        run: |
+          mkdir -p browsers/chrome
+          
+          # Simulate Chrome preparation with extensions:
+          echo "Installing Leakquidator, NoScript, and AdGuard into Chrome preset."
+          echo "rules: optimal security" > browsers/chrome/security-preset.txt
+          
+          # Download a base browser (replace with actual source if available)
+          echo "Base Chrome browser downloaded." > browsers/chrome/base.txt
+          
+          # Pack into a zip file
+          zip -r browsers/chrome-browser.zip browsers/chrome
+          echo "Chrome browser prepared and zipped."
+
+      # Step 6: Download and prepare Safari browser with presets
+      - name: Prepare Safari Browser with Extensions and Filters
+        run: |
+          mkdir -p browsers/safari
+
+          # Simulate Safari preparation with extensions:
+          echo "Installing Leakquidator, NoScript, and AdGuard into Safari preset."
+          echo "rules: optimal security" > browsers/safari/security-preset.txt
+
+          # Download a base browser (replace with actual source if available)
+          echo "Base Safari browser downloaded." > browsers/safari
