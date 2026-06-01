@@ -1,0 +1,60 @@
+name: Clear Cookies and Setup in Tor Browser
+
+on:
+  workflow_dispatch:
+
+jobs:
+  setup_tor_and_extensions:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl wget xvfb firefox-esr zip unzip
+
+      - name: Download and Install Tor Browser
+        run: |
+          # Download latest Tor Browser for Linux
+          wget https://www.torproject.org/dist/torbrowser/12.0.3/tor-browser-linux64-12.0.3_ALL.tar.xz
+
+          # Extract the downloaded file
+          tar -xvf tor-browser-linux64-12.0.3_ALL.tar.xz
+
+          # Change permissions to allow execution
+          chmod +x tor-browser_en-US/start-tor-browser.desktop
+
+          echo "Tor browser installed."
+
+      - name: Run Tor Browser Commands to Install Extensions
+        run: |
+          # Define extensions to install
+          EXTENSIONS=(
+            "Leakquidator"
+            "NoScript"
+            "Origin"
+          )
+
+          # Run Tor Browser with extensions
+          for EXTENSION in "${EXTENSIONS[@]}"; do
+            echo "Installing extension: $EXTENSION"
+            # Note: Actual installation process varies based on the browser capabilities.
+            # You may need to use REST endpoints or the browser Profiler to install extensions.
+          done
+
+      - name: Clear cookies for multiple domains in Tor
+        run: |
+          DOMAINS=(google.com github.com chatgpt.com uorigin.com mozilla)
+          for DOMAIN in "${DOMAINS[@]}"; do
+            echo "Clearing cookies for: $DOMAIN"
+
+            # Run Tor browser with necessary flags and scripts to clear cookies
+            ./tor-browser_en-US/start-tor-browser --clear-browsing-data
+          done
+
+      - name: Verify Workflow Actor
+        run: |
+          echo "Actor who triggered the workflow: ${{ github.actor }}"
