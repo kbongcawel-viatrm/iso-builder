@@ -1,0 +1,8 @@
+# 1. First request saves cookies
+curl -c cookies.txt https://example.com
+
+# 2. Reset the site-specific cookies from the jar
+sed -i '/://example.com' cookies.txt
+
+# 3. Next request runs with a reset state for that site
+curl -b cookies.txt -c cookies.txt https://example.com
