@@ -11,11 +11,12 @@ jobs:
       TAIL_SCALE_DIR: tailscale
     
     steps:
-      - name: Download Tailscale
+      - name: Download and run Tailscale
         run: |
           set -euo pipefail
           mkdir -p $RUNNER_TEMP/$TAIL_SCALE_DIR
           sudo chown $USER:$USER -R $RUNNER_TEMP/$TAIL_SCALE_DIR/
           curl -fsSL https://tailscale.com/install.sh | sh
+          sudo tailscale up
 
           
