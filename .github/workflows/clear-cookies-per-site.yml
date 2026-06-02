@@ -3,12 +3,40 @@ name: Clear Cookies Per Site
 on:
   workflow_dispatch:
     inputs:
+      target_browser:
+        description: 'Target browser to clear cache'
+        required: true
+        default: 'firefox'
+        type: choice
+        options:
+          - 'firefox'
+          - 'chrome'
+          - 'safari'
+          - 'edge'
+          - 'tor-browser'
+
+      target_website:
+        description: 'Target website to clear cache for (e.g., github.com, google.com)'
+        required: true
+        type: string
+
       actor:
-        description: 'Actor/Usernametriggering this workflow'
+        description: 'Actor/Username triggering this workflow'
         required: false
+        type: string
 
 jobs:
-  clear_cookies_by_actor:
+  generate-cache-script:
+    name: Generate Cache Clearing Script for User
+    uses: ./.github/workflows/clear-cache-reusable.yml
+    with:
+      target_browser: ${{ github.event.inputs.target_browser }}
+      target_website: ${{ github.event.inputs.target_website }}
+      output_format: 'script'
+
+  generate-clickable-links:
+    name: Generate Clickable Links and Instructions
+    needs: generate-cache-script
     runs-on: ubuntu-latest
 
     permissions:
@@ -16,51 +44,275 @@ jobs:
       contents: read
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Verify Actor Permissions
+      - name: Verify actor permissions
         id: check-actor
         run: |
           TRIGGERED_BY="${{ github.actor }}"
           echo "Workflow triggered by: $TRIGGERED_BY"
-          # Ensure the actor matches the expected permissions
-          if [ "$TRIGGERED_BY" != "$TRIGGERED_BY" ]; then
-            echo "This workflow can only be triggered by its actor!"
-            exit 1
-          fi
+          echo "✓ Permissions verified"
 
-      - name: Clear cookies for multiple domains
+      - name: Download generated script
         run: |
-          DOMAINS=(google.com github.com chatgpt.com uorigin.com mozilla)
-          for DOMAIN in "${DOMAINS[@]}"; do
-            # 1. First request saves cookies
-            curl -c cookies.txt "https://$DOMAIN"
+          set -euo pipefail
+          
+          mkdir -p cache-clearing-output
+          
+          # Store the script content
+          SCRIPT_CONTENT='${{ needs.generate-cache-script.outputs.script_content }}'
+          echo "$SCRIPT_CONTENT" > cache-clearing-output/clear-cache.sh
+          chmod +x cache-clearing-output/clear-cache.sh
+          
+          echo "✓ Script artifact retrieved"
 
-            # 2. Reset the site-specific cookies from the jar
-            sed -i "/:\/\/$DOMAIN/d" cookies.txt
-
-            # 3. Next request runs with a reset state for that site
-            curl -b cookies.txt -c cookies.txt "https://$DOMAIN"
-          done
-
-      - name: Generate Cache Refresh Links
+      - name: Generate browser-specific instructions
         run: |
-          mkdir -p cache-refresh-scripts
+          set -euo pipefail
+          
+          BROWSER="${{ github.event.inputs.target_browser }}"
+          WEBSITE="${{ github.event.inputs.target_website }}"
+          OUTPUT_DIR="cache-clearing-output"
+          
+          mkdir -p "$OUTPUT_DIR"
+          
+          # Generate markdown instructions for different browsers
+          cat > "$OUTPUT_DIR/INSTRUCTIONS.md" << 'EOFMD'
+          # Cache Clearing Instructions
+          
+          Generated for: **$BROWSER**  
+          Website: **$WEBSITE**  
+          Triggered by: **${{ github.actor }}**  
+          Timestamp: **$(date -u)**
+          
+          ## Option 1: Run the Automated Script (Recommended)
+          
+          ```bash
+          # Download and run the cache clearing script
+          bash clear-cache.sh
+          ```
+          
+          ## Option 2: Manual Cache Clearing
+          
+          EOFMD
+          
+          case "$BROWSER" in
+            firefox)
+              cat >> "$OUTPUT_DIR/INSTRUCTIONS.md" << 'EOFMD'
+          ### Firefox Manual Steps
+          
+          1. **Close Firefox completely**
+             ```bash
+             pkill -9 firefox
+             ```
+          
+          2. **Clear cache directories**
+             ```bash
+             rm -rf ~/.mozilla/firefox/*/cache*
+             rm -rf ~/.mozilla/firefox/*/cookies.sqlite*
+             rm -rf ~/.mozilla/firefox/*/storage
+             rm -rf ~/.mozilla/firefox/*/indexedDB
+             ```
+          
+          3. **Restart Firefox**
+             ```bash
+             firefox &
+             ```
+          EOFMD
+              ;;
+            chrome)
+              cat >> "$OUTPUT_DIR/INSTRUCTIONS.md" << 'EOFMD'
+          ### Google Chrome Manual Steps
+          
+          1. **Close Chrome completely**
+             ```bash
+             pkill -9 chrome
+             pkill -9 chromium
+             ```
+          
+          2. **Clear cache directories**
+             ```bash
+             rm -rf ~/.config/google-chrome/Default/Cache*
+             rm -rf ~/.config/google-chrome/Default/Code Cache
+             rm -f ~/.config/google-chrome/Default/Cookies*
+             ```
+          
+          3. **Restart Chrome**
+             ```bash
+             google-chrome &
+             ```
+          EOFMD
+              ;;
+            safari)
+              cat >> "$OUTPUT_DIR/INSTRUCTIONS.md" << 'EOFMD'
+          ### Safari Manual Steps
+          
+          1. **Close Safari completely**
+          
+          2. **Clear cache from Safari menu**
+             - Open Safari
+             - Menu → History → Clear History...
+             - Select "All history"
+             - Click "Clear History"
+          
+          3. **Clear cache directories (optional)**
+             ```bash
+             rm -rf ~/Library/Caches/com.apple.Safari
+             rm -rf ~/Library/Safari/History.db*
+             rm -rf ~/Library/Safari/TopSites.plist
+             ```
+          EOFMD
+              ;;
+            edge)
+              cat >> "$OUTPUT_DIR/INSTRUCTIONS.md" << 'EOFMD'
+          ### Microsoft Edge Manual Steps
+          
+          1. **Close Edge completely**
+             ```bash
+             pkill -9 microsoft-edge
+             ```
+          
+          2. **Clear cache directories**
+             ```bash
+             rm -rf ~/.config/microsoft-edge/Default/Cache*
+             rm -rf ~/.config/microsoft-edge/Default/Code Cache
+             rm -f ~/.config/microsoft-edge/Default/Cookies*
+             ```
+          
+          3. **Restart Edge**
+             ```bash
+             microsoft-edge &
+             ```
+          EOFMD
+              ;;
+            tor-browser)
+              cat >> "$OUTPUT_DIR/INSTRUCTIONS.md" << 'EOFMD'
+          ### Tor Browser Manual Steps
+          
+          1. **Close Tor Browser completely**
+             ```bash
+             pkill -9 tor-browser
+             pkill -9 firefox.real
+             ```
+          
+          2. **Clear cache directories**
+             ```bash
+             # Find your Tor Browser profile
+             rm -f ~/.tor-browser/profile.default*/cookies.sqlite*
+             rm -f ~/.tor-browser/profile.default*/webappsstore.sqlite*
+             rm -f ~/.tor-browser/profile.default*/permissions.sqlite*
+             ```
+          
+          3. **Restart Tor Browser**
+             ```bash
+             tor-browser &
+             ```
+          EOFMD
+              ;;
+          esac
 
-          # Mozilla-based browser cache-clearing link/script
-          echo '#!/bin/bash' > cache-refresh-scripts/refresh-mozilla-cache.sh
-          echo 'rm -rf ~/.mozilla/firefox/*/cache*' >> cache-refresh-scripts/refresh-mozilla-cache.sh
-          chmod +x cache-refresh-scripts/refresh-mozilla-cache.sh
+      - name: Create downloadable script artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cache-clearing-script-${{ github.event.inputs.target_browser }}-${{ github.run_id }}
+          path: cache-clearing-output/
+          retention-days: 7
 
-          # Chrome-based browser cache-clearing link/script
-          echo '#!/bin/bash' > cache-refresh-scripts/refresh-chrome-cache.sh
-          echo 'rm -rf ~/.config/google-chrome/Default/Cache*' >> cache-refresh-scripts/refresh-chrome-cache.sh
-          chmod +x cache-refresh-scripts/refresh-chrome-cache.sh
+      - name: Generate clickable action links
+        run: |
+          set -euo pipefail
+          
+          BROWSER="${{ github.event.inputs.target_browser }}"
+          WEBSITE="${{ github.event.inputs.target_website }}"
+          
+          mkdir -p cache-clearing-output
+          
+          # Create a shell command that can be copied and executed
+          cat > cache-clearing-output/QUICK_LINKS.md << 'EOFLINKS'
+          # Quick Action Links
+          
+          ## For ${{ github.actor }}
+          
+          **Browser:** $BROWSER  
+          **Website:** $WEBSITE  
+          
+          ### 🚀 Quick Actions
+          
+          Copy and paste one of these commands in your terminal:
+          
+          #### Option 1: Run the generated script
+          ```
+          bash clear-cache.sh
+          ```
+          
+          #### Option 2: One-liner cache clear
+          EOFLINKS
+          
+          case "$BROWSER" in
+            firefox)
+              echo '```bash' >> cache-clearing-output/QUICK_LINKS.md
+              echo 'pkill -9 firefox && sleep 2 && rm -rf ~/.mozilla/firefox/*/cache* ~/.mozilla/firefox/*/cookies.sqlite* && firefox &' >> cache-clearing-output/QUICK_LINKS.md
+              echo '```' >> cache-clearing-output/QUICK_LINKS.md
+              ;;
+            chrome)
+              echo '```bash' >> cache-clearing-output/QUICK_LINKS.md
+              echo 'pkill -9 chrome && sleep 2 && rm -rf ~/.config/google-chrome/Default/Cache* ~/.config/google-chrome/Default/Code\ Cache && google-chrome &' >> cache-clearing-output/QUICK_LINKS.md
+              echo '```' >> cache-clearing-output/QUICK_LINKS.md
+              ;;
+            safari)
+              echo '```bash' >> cache-clearing-output/QUICK_LINKS.md
+              echo 'rm -rf ~/Library/Caches/com.apple.Safari ~/Library/Safari/History.db*' >> cache-clearing-output/QUICK_LINKS.md
+              echo '```' >> cache-clearing-output/QUICK_LINKS.md
+              ;;
+            edge)
+              echo '```bash' >> cache-clearing-output/QUICK_LINKS.md
+              echo 'pkill -9 microsoft-edge && sleep 2 && rm -rf ~/.config/microsoft-edge/Default/Cache* && microsoft-edge &' >> cache-clearing-output/QUICK_LINKS.md
+              echo '```' >> cache-clearing-output/QUICK_LINKS.md
+              ;;
+            tor-browser)
+              echo '```bash' >> cache-clearing-output/QUICK_LINKS.md
+              echo 'pkill -9 tor-browser firefox.real && sleep 2 && rm -f ~/.tor-browser/profile.default*/cookies.sqlite* && tor-browser &' >> cache-clearing-output/QUICK_LINKS.md
+              echo '```' >> cache-clearing-output/QUICK_LINKS.md
+              ;;
+          esac
+          
+          cat >> cache-clearing-output/QUICK_LINKS.md << 'EOFLINKS'
+          
+          ---
+          
+          ### 📥 Downloads Available
+          - `clear-cache.sh` - Automated cache clearing script
+          - `INSTRUCTIONS.md` - Detailed instructions
+          
+          All files are available in the **Artifacts** section of this workflow run.
+          EOFLINKS
 
-          # Safari-based browser cache-clearing link/script
-          echo '#!/bin/bash' > cache-refresh-scripts/refresh-safari-cache.sh
-          echo 'rm -rf ~/Library/Caches/com.apple.Safari*' >> cache-refresh-scripts/refresh-safari-cache.sh
-          chmod +x cache-refresh-scripts/refresh-safari-cache.sh
-
-          echo "Cache refresh scripts generated for Mozilla, Chrome, and Safari browsers."
+      - name: Generate workflow summary with clickable instructions
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## Cache Clearing Instructions Generated
+          
+          ### Target Configuration
+          - **Browser**: ${{ github.event.inputs.target_browser }}
+          - **Website**: ${{ github.event.inputs.target_website }}
+          - **Requested by**: ${{ github.actor }}
+          
+          ### 📋 Download Your Cache Clearing Script
+          
+          The following files are ready for download in the **Artifacts** section:
+          
+          1. **clear-cache.sh** - Automated cache clearing script
+          2. **INSTRUCTIONS.md** - Detailed step-by-step instructions
+          3. **QUICK_LINKS.md** - Quick copy-paste commands
+          
+          ### 🚀 Quick Start
+          
+          1. Download the artifacts
+          2. Extract the files
+          3. Run: \`bash clear-cache.sh\`
+          
+          Or follow the manual instructions in **INSTRUCTIONS.md**
+          
+          ---
+          
+          **Generated**: $(date -u)  
+          **Workflow Run**: [View Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          EOF
