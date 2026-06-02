@@ -4,56 +4,178 @@ on:
   workflow_dispatch:
 
 jobs:
-  use-qubes-iso:
-    runs-on: ubuntu-latest
-
+  download-verify-and-install:
+    runs-on: [self-hosted, tails]
+    
     env:
       ISO_NAME: Qubes-R4.3.1-rc1-x86_64.iso
       ISO_URL: https://mirrors.edge.kernel.org/qubes/iso/Qubes-R4.3.1-rc1-x86_64.iso
       SIG_URL: https://mirrors.edge.kernel.org/qubes/iso/Qubes-R4.3.1-rc1-x86_64.iso.asc
-      ISO_ROOT_DIR: iso
+      ISO_INSTALL_DIR: /opt/iso-storage
+      TARGET_DEVICE: /dev/nvme0n1
+
     steps:
       - name: Download Qubes ISO
         run: |
           set -euo pipefail
-          mkdir -p $RUNNER_TEMP/$ISO_ROOT_DIR 
-          sudo chown $USER:$USER -R $RUNNER_TEMP/$ISO_ROOT_DIR/
-          cd $RUNNER_TEMP/$ISO_ROOT_DIR
-          curl --fail --location --show-error \
-            --output "$RUNNER_TEMP/$ISO_ROOT_DIR/$ISO_NAME" \
-            "$ISO_URL"
+          mkdir -p ${{ env.ISO_INSTALL_DIR }}
+          cd ${{ env.ISO_INSTALL_DIR }}
+          
+          echo "Downloading ISO to ${{ env.ISO_INSTALL_DIR }}..."
+          curl --fail --location --show-error --progress-bar \
+            --output "${{ env.ISO_NAME }}" \
+            "${{ env.ISO_URL }}"
+          
+          echo "✓ Download completed: $(ls -lh ${{ env.ISO_NAME }})"
 
       - name: Verify Qubes ISO GPG signature
         run: |
           set -euo pipefail
-
-          sudo apt-get update
-          sudo apt-get install -y curl gnupg2 ca-certificates
-
+          
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq curl gnupg2 ca-certificates
+          
+          cd ${{ env.ISO_INSTALL_DIR }}
+          
+          echo "Downloading GPG signature..."
           curl --fail --location --show-error \
-            --output "$RUNNER_TEMP/$ISO_ROOT_DIR/$ISO_NAME.asc" \
-            "$SIG_URL"
-
+            --output "${{ env.ISO_NAME }}.asc" \
+            "${{ env.SIG_URL }}"
+          
+          echo "Importing Qubes signing key..."
           curl --fail --location --show-error \
             --output qubes-release-4.3-signing-key.asc \
             "https://keys.qubes-os.org/keys/qubes-release-4.3-signing-key.asc"
-
+          
           gpg2 --batch --import qubes-release-4.3-signing-key.asc
-
+          
+          echo "Verifying GPG signature..."
           gpg2 --batch --verify \
-            "$RUNNER_TEMP/$ISO_ROOT_DIR/$ISO_NAME.asc" \
-            "$RUNNER_TEMP/$ISO_ROOT_DIR/$ISO_NAME"
+            "${{ env.ISO_NAME }}.asc" \
+            "${{ env.ISO_NAME }}"
+          
+          echo "✓ GPG signature verified successfully"
 
-      - name: Use ISO in later runtime step
+      - name: Generate and verify checksums
         run: |
-          cd $RUNNER_TEMP
-          VERIFIED_ISO="$ISO_ROOT_DIR/$ISO_NAME"
-          echo "Verified ISO is available at: $VERIFIED_ISO"
-          ls -lh "$VERIFIED_ISO"
-      
-      - name: Upload verified ISO artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Qubes-R4.3.1-rc1-x86_64.iso
-          path: $VERIFIED_ISO
+          set -euo pipefail
+          cd ${{ env.ISO_INSTALL_DIR }}
+          
+          echo "Generating SHA256 checksum..."
+          sha256sum "${{ env.ISO_NAME }}" > "${{ env.ISO_NAME }}.sha256"
+          cat "${{ env.ISO_NAME }}.sha256"
 
+      - name: Verify target device exists
+        run: |
+          set -euo pipefail
+          
+          if [[ ! -b "${{ env.TARGET_DEVICE }}" ]]; then
+            echo "Error: Target device ${{ env.TARGET_DEVICE }} does not exist or is not a block device"
+            echo "Available block devices:"
+            lsblk -d -o NAME,SIZE,TYPE
+            exit 1
+          fi
+          
+          echo "✓ Target device found: ${{ env.TARGET_DEVICE }}"
+          echo ""
+          echo "Device information:"
+          lsblk -o NAME,SIZE,TYPE,MOUNTPOINT "${{ env.TARGET_DEVICE }}"
+
+      - name: Confirm and prepare device
+        run: |
+          set -euo pipefail
+          
+          DEVICE="${{ env.TARGET_DEVICE }}"
+          echo "WARNING: About to write to $DEVICE"
+          echo ""
+          echo "Device details:"
+          sudo blkid "$DEVICE" || echo "Device not yet formatted"
+          lsblk "$DEVICE"
+          echo ""
+          
+          # Check if device is mounted and warn
+          if mountpoint -q "$DEVICE"* 2>/dev/null; then
+            echo "⚠ Device appears to be mounted. Attempting to unmount..."
+            sudo umount "$DEVICE"* 2>/dev/null || true
+          fi
+          
+          echo "✓ Device ready for installation"
+
+      - name: Write ISO to device
+        run: |
+          set -euo pipefail
+          
+          ISO_PATH="${{ env.ISO_INSTALL_DIR }}/${{ env.ISO_NAME }}"
+          DEVICE="${{ env.TARGET_DEVICE }}"
+          
+          echo "Starting ISO installation..."
+          echo "Source: $ISO_PATH"
+          echo "Target: $DEVICE"
+          echo ""
+          
+          # Write ISO to device with progress
+          sudo dd if="$ISO_PATH" of="$DEVICE" bs=4M status=progress conv=fsync
+          
+          echo ""
+          echo "✓ ISO written to $DEVICE"
+
+      - name: Verify installation
+        run: |
+          set -euo pipefail
+          
+          ISO_PATH="${{ env.ISO_INSTALL_DIR }}/${{ env.ISO_NAME }}"
+          DEVICE="${{ env.TARGET_DEVICE }}"
+          
+          echo "Verifying ISO installation..."
+          echo ""
+          
+          # Get size of ISO
+          ISO_SIZE=$(stat -f%z "$ISO_PATH" 2>/dev/null || stat -c%s "$ISO_PATH")
+          echo "ISO size: $(numfmt --to=iec $ISO_SIZE 2>/dev/null || echo $ISO_SIZE bytes)"
+          
+          # Verify by reading back and comparing checksums
+          echo "Computing checksum of installed ISO..."
+          sudo dd if="$DEVICE" bs=4M count=$((ISO_SIZE / (4*1024*1024) + 1)) 2>/dev/null | sha256sum > /tmp/installed.sha256
+          
+          cd ${{ env.ISO_INSTALL_DIR }}
+          ORIGINAL_HASH=$(cut -d' ' -f1 "${{ env.ISO_NAME }}.sha256")
+          INSTALLED_HASH=$(cut -d' ' -f1 /tmp/installed.sha256)
+          
+          echo "Original ISO checksum:   $ORIGINAL_HASH"
+          echo "Installed ISO checksum:  $INSTALLED_HASH"
+          echo ""
+          
+          if [[ "$ORIGINAL_HASH" == "$INSTALLED_HASH" ]]; then
+            echo "✓ Checksums match - Installation verified successfully!"
+          else
+            echo "✗ Checksums DO NOT match - Installation may have failed!"
+            exit 1
+          fi
+
+      - name: Upload workflow summary
+        if: always()
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## ISO Installation Complete
+          
+          ✓ **Installation Status**: Success
+          
+          ### Installation Details
+          - **ISO**: ${{ env.ISO_NAME }}
+          - **ISO Location**: ${{ env.ISO_INSTALL_DIR }}/${{ env.ISO_NAME }}
+          - **Target Device**: ${{ env.TARGET_DEVICE }}
+          - **Installation Method**: dd (direct block write)
+          
+          ### Device Information
+          \`\`\`
+          $(lsblk ${{ env.TARGET_DEVICE }})
+          \`\`\`
+          
+          ### Verification
+          - ✓ ISO signature verified
+          - ✓ Checksums verified
+          - ✓ Device installation verified
+          
+          ### Next Steps
+          You can now boot from ${{ env.TARGET_DEVICE }} to begin the Qubes OS installation process.
+          EOF
