@@ -23,175 +23,611 @@ on:
         default: 'all'
         type: string
 
-      target_platform:
-        description: 'Target platform'
-        required: true
-        default: 'linux'
-        type: choice
-        options:
-          - 'linux'
-          - 'windows'
-          - 'macos'
-
-      reset_preferences:
-        description: "Also reset preferences"
-        required: true
-        default: "true"
-        type: choice
-        options:
-          - "false"
-          - "true"
-
 jobs:
-  generate-cache-script:
-    name: Generate Cache Clearing Scripts
-    uses: ./.github/workflows/clear-cache-reusable.yml
-    with:
-      target_browser: ${{ github.event.inputs.target_browser || 'tor-browser' }}
-      target_website: ${{ github.event.inputs.target_website || 'all' }}
-      output_format: 'script'
-
-  execute-on-host:
-    name: Execute Cache Clearing on Target Host
-    needs: generate-cache-script
+  get-runner-info:
+    name: Get Runner IP Address
     runs-on: [self-hosted, tails-os]
-
+    timeout-minutes: 2
+    outputs:
+      runner_ip: ${{ steps.get-ip.outputs.ip }}
+      runner_hostname: ${{ steps.get-ip.outputs.hostname }}
+    
     steps:
-      - name: Check environment
+      - name: Get local IP address
+        id: get-ip
         shell: bash
         run: |
           set -euo pipefail
           
-          echo "System Information:"
-          echo "User: $(whoami)"
-          echo "OS: $(uname -s)"
-          echo "Shell: $SHELL"
+          # Try to get IP from multiple sources
+          IP=$(hostname -I | awk '{print $1}' 2>/dev/null || \
+               ifconfig | grep -A1 "inet " | head -1 | awk '{print $2}' | cut -d: -f2 2>/dev/null || \
+               ip addr show | grep "inet " | grep -v "127.0.0.1" | awk '{print $2}' | cut -d/ -f1 | head -1 2>/dev/null || \
+               echo "localhost")
           
-          if [ -f /etc/os-release ]; then
-            grep "^ID=" /etc/os-release
-          fi
+          HOSTNAME=$(hostname 2>/dev/null || echo "tails-runner")
+          
+          echo "ip=$IP" >> "$GITHUB_OUTPUT"
+          echo "hostname=$HOSTNAME" >> "$GITHUB_OUTPUT"
+          
+          echo "✓ Runner IP: $IP"
+          echo "✓ Hostname: $HOSTNAME"
 
-      - name: Determine platform and set script
-        id: platform
-        shell: bash
-        run: |
-          PLATFORM="${{ github.event.inputs.target_platform || 'linux' }}"
-          BROWSER="${{ github.event.inputs.target_browser || 'tor-browser' }}"
-          
-          case "$PLATFORM" in
-            linux)
-              SCRIPT_EXT="sh"
-              ;;
-            windows)
-              SCRIPT_EXT="ps1"
-              ;;
-            macos)
-              SCRIPT_EXT="sh"
-              ;;
-          esac
-          
-          echo "platform=$PLATFORM" >> "$GITHUB_OUTPUT"
-          echo "script_ext=$SCRIPT_EXT" >> "$GITHUB_OUTPUT"
-
-      - name: Download appropriate cache clearing script
+  generate-html-control-panel:
+    name: Generate HTML Control Panel
+    needs: get-runner-info
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Create control panel HTML
         run: |
           set -euo pipefail
           
+          RUNNER_IP="${{ needs.get-runner-info.outputs.runner_ip }}"
+          RUNNER_HOSTNAME="${{ needs.get-runner-info.outputs.runner_hostname }}"
           BROWSER="${{ github.event.inputs.target_browser || 'tor-browser' }}"
-          PLATFORM="${{ steps.platform.outputs.platform }}"
-          SCRIPT_EXT="${{ steps.platform.outputs.script_ext }}"
+          WEBSITE="${{ github.event.inputs.target_website || 'all' }}"
           
-          mkdir -p scripts
+          mkdir -p output
           
-          # Store script content from job output
-          if [ "$SCRIPT_EXT" = "sh" ]; then
-            SCRIPT_CONTENT='${{ needs.generate-cache-script.outputs.bash_script_path }}'
-            echo "Using Bash script for $PLATFORM"
-          else
-            echo "Using PowerShell script for $PLATFORM"
-          fi
+          cat > output/control-panel.html << 'EOFHTML'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Cache Clear Control - Local Host</title>
+              <style>
+                  * {
+                      margin: 0;
+                      padding: 0;
+                      box-sizing: border-box;
+                  }
+                  
+                  body {
+                      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                      min-height: 100vh;
+                      display: flex;
+                      align-items: center;
+                      justify-content: center;
+                      padding: 20px;
+                  }
+                  
+                  .container {
+                      background: white;
+                      border-radius: 20px;
+                      box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+                      max-width: 600px;
+                      width: 100%;
+                      overflow: hidden;
+                  }
+                  
+                  .header {
+                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                      color: white;
+                      padding: 50px 30px;
+                      text-align: center;
+                  }
+                  
+                  .header h1 {
+                      font-size: 36px;
+                      margin-bottom: 15px;
+                  }
+                  
+                  .header p {
+                      opacity: 0.95;
+                      font-size: 16px;
+                      margin-bottom: 10px;
+                  }
+                  
+                  .host-indicator {
+                      background: rgba(255, 255, 255, 0.2);
+                      border-radius: 8px;
+                      padding: 10px 15px;
+                      margin-top: 15px;
+                      font-size: 14px;
+                      font-family: monospace;
+                  }
+                  
+                  .content {
+                      padding: 40px 30px;
+                  }
+                  
+                  .status-panel {
+                      background: #f0f4ff;
+                      border-left: 4px solid #667eea;
+                      border-radius: 8px;
+                      padding: 20px;
+                      margin-bottom: 30px;
+                  }
+                  
+                  .status-item {
+                      display: flex;
+                      justify-content: space-between;
+                      margin-bottom: 12px;
+                      font-size: 15px;
+                  }
+                  
+                  .status-item:last-child {
+                      margin-bottom: 0;
+                  }
+                  
+                  .status-label {
+                      font-weight: 600;
+                      color: #333;
+                  }
+                  
+                  .status-value {
+                      color: #667eea;
+                      font-weight: 500;
+                      word-break: break-all;
+                  }
+                  
+                  .action-button {
+                      width: 100%;
+                      padding: 25px;
+                      background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+                      color: white;
+                      border: none;
+                      border-radius: 12px;
+                      font-size: 20px;
+                      font-weight: 600;
+                      cursor: pointer;
+                      transition: all 0.3s ease;
+                      margin-bottom: 20px;
+                      text-transform: uppercase;
+                      letter-spacing: 1px;
+                      box-shadow: 0 10px 30px rgba(255, 107, 107, 0.3);
+                  }
+                  
+                  .action-button:hover {
+                      transform: translateY(-3px);
+                      box-shadow: 0 15px 40px rgba(255, 107, 107, 0.4);
+                  }
+                  
+                  .action-button:active {
+                      transform: translateY(-1px);
+                  }
+                  
+                  .action-button.success {
+                      background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
+                      box-shadow: 0 10px 30px rgba(76, 175, 80, 0.3);
+                  }
+                  
+                  .action-button.disabled {
+                      opacity: 0.5;
+                      cursor: not-allowed;
+                      transform: none;
+                  }
+                  
+                  .server-status {
+                      background: #e8f5e9;
+                      border: 2px solid #4caf50;
+                      border-radius: 8px;
+                      padding: 20px;
+                      margin-bottom: 20px;
+                      text-align: center;
+                  }
+                  
+                  .server-status.offline {
+                      background: #ffebee;
+                      border-color: #f44336;
+                  }
+                  
+                  .status-indicator {
+                      width: 20px;
+                      height: 20px;
+                      border-radius: 50%;
+                      background: #4caf50;
+                      display: inline-block;
+                      margin-right: 10px;
+                      animation: pulse 2s infinite;
+                  }
+                  
+                  .status-indicator.offline {
+                      background: #f44336;
+                      animation: none;
+                  }
+                  
+                  @keyframes pulse {
+                      0%, 100% {
+                          opacity: 1;
+                      }
+                      50% {
+                          opacity: 0.5;
+                      }
+                  }
+                  
+                  .status-text {
+                      font-weight: 600;
+                      font-size: 16px;
+                      margin-top: 10px;
+                  }
+                  
+                  .clear-button-group {
+                      display: flex;
+                      gap: 10px;
+                      margin-bottom: 20px;
+                  }
+                  
+                  .clear-btn {
+                      flex: 1;
+                      padding: 15px;
+                      background: #667eea;
+                      color: white;
+                      border: none;
+                      border-radius: 8px;
+                      cursor: pointer;
+                      font-weight: 600;
+                      transition: all 0.3s;
+                  }
+                  
+                  .clear-btn:hover {
+                      background: #5568d3;
+                      transform: translateY(-2px);
+                  }
+                  
+                  .info-section {
+                      background: #fff3cd;
+                      border-left: 4px solid #ffc107;
+                      border-radius: 8px;
+                      padding: 20px;
+                      margin-bottom: 20px;
+                      font-size: 14px;
+                      line-height: 1.6;
+                  }
+                  
+                  .info-section strong {
+                      color: #856404;
+                  }
+                  
+                  .response-box {
+                      background: #f5f5f5;
+                      border: 1px solid #ddd;
+                      border-radius: 8px;
+                      padding: 15px;
+                      margin-top: 20px;
+                      display: none;
+                      font-family: monospace;
+                      font-size: 13px;
+                      max-height: 300px;
+                      overflow-y: auto;
+                  }
+                  
+                  .response-box.success {
+                      background: #d4edda;
+                      border-color: #c3e6cb;
+                      color: #155724;
+                  }
+                  
+                  .response-box.error {
+                      background: #f8d7da;
+                      border-color: #f5c6cb;
+                      color: #721c24;
+                  }
+                  
+                  .footer {
+                      text-align: center;
+                      padding: 20px;
+                      background: #f8f9fa;
+                      font-size: 12px;
+                      color: #999;
+                      border-top: 1px solid #e0e0e0;
+                  }
+                  
+                  @media (max-width: 500px) {
+                      .content {
+                          padding: 25px 20px;
+                      }
+                      
+                      .header {
+                          padding: 35px 20px;
+                      }
+                      
+                      .header h1 {
+                          font-size: 28px;
+                      }
+                  }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <div class="header">
+                      <h1>🎛️</h1>
+                      <h1>Cache Control</h1>
+                      <p>Local Host Cache Management</p>
+                      <div class="host-indicator">
+                          Connected to: $RUNNER_HOSTNAME ($RUNNER_IP)
+                      </div>
+                  </div>
+                  
+                  <div class="content">
+                      <div class="server-status" id="serverStatus">
+                          <span class="status-indicator" id="statusIndicator"></span>
+                          <div class="status-text" id="statusText">Checking connection...</div>
+                      </div>
+                      
+                      <div class="status-panel">
+                          <div class="status-item">
+                              <span class="status-label">Host:</span>
+                              <span class="status-value" id="hostVal">$RUNNER_HOSTNAME</span>
+                          </div>
+                          <div class="status-item">
+                              <span class="status-label">IP Address:</span>
+                              <span class="status-value" id="ipVal">$RUNNER_IP</span>
+                          </div>
+                          <div class="status-item">
+                              <span class="status-label">Browser:</span>
+                              <span class="status-value">$BROWSER</span>
+                          </div>
+                          <div class="status-item">
+                              <span class="status-label">Target:</span>
+                              <span class="status-value">$WEBSITE</span>
+                          </div>
+                      </div>
+                      
+                      <div class="info-section">
+                          ℹ️ <strong>How it works:</strong>
+                          <br>Click the button below to send a cache clear command to the local host ($RUNNER_IP).
+                          <br>The command will be executed immediately on the target system.
+                      </div>
+                      
+                      <button class="action-button" id="clearBtn" onclick="triggerCacheClear()">
+                          🧹 CLEAR CACHE ON HOST
+                      </button>
+                      
+                      <div class="response-box" id="responseBox"></div>
+                      
+                      <div class="clear-button-group">
+                          <button class="clear-btn" onclick="location.reload()">🔄 Refresh</button>
+                          <button class="clear-btn" onclick="checkStatus()">📡 Check Status</button>
+                      </div>
+                  </div>
+                  
+                  <div class="footer">
+                      Host Time: <span id="timestamp"></span>
+                      <br>
+                      Port: 8787
+                  </div>
+              </div>
+              
+              <script>
+                  const HOST_IP = '$RUNNER_IP';
+                  const HOST_NAME = '$RUNNER_HOSTNAME';
+                  const BROWSER = '$BROWSER';
+                  const BASE_URL = `http://$RUNNER_IP:8787`;
+                  
+                  function updateTimestamp() {
+                      document.getElementById('timestamp').textContent = new Date().toLocaleTimeString();
+                  }
+                  
+                  function checkStatus() {
+                      fetch(`${BASE_URL}/status`)
+                          .then(res => res.json())
+                          .then(data => {
+                              setServerOnline();
+                              showResponse('✓ Server is online and ready', 'success');
+                          })
+                          .catch(err => {
+                              setServerOffline();
+                              showResponse('✗ Cannot connect to server', 'error');
+                          });
+                  }
+                  
+                  function setServerOnline() {
+                      const status = document.getElementById('serverStatus');
+                      const indicator = document.getElementById('statusIndicator');
+                      const text = document.getElementById('statusText');
+                      
+                      status.classList.remove('offline');
+                      indicator.classList.remove('offline');
+                      text.textContent = '✓ Server Online';
+                  }
+                  
+                  function setServerOffline() {
+                      const status = document.getElementById('serverStatus');
+                      const indicator = document.getElementById('statusIndicator');
+                      const text = document.getElementById('statusText');
+                      
+                      status.classList.add('offline');
+                      indicator.classList.add('offline');
+                      text.textContent = '✗ Server Offline';
+                  }
+                  
+                  function triggerCacheClear() {
+                      const btn = document.getElementById('clearBtn');
+                      btn.disabled = true;
+                      btn.textContent = '⏳ Clearing cache...';
+                      
+                      fetch(`${BASE_URL}/clear`, {
+                          method: 'POST',
+                          headers: {
+                              'Content-Type': 'application/json'
+                          },
+                          body: JSON.stringify({
+                              browser: BROWSER,
+                              action: 'clear'
+                          })
+                      })
+                          .then(res => res.json())
+                          .then(data => {
+                              btn.classList.add('success');
+                              btn.textContent = '✓ Cache Cleared!';
+                              showResponse(data.message, 'success');
+                              setTimeout(() => {
+                                  btn.disabled = false;
+                                  btn.classList.remove('success');
+                                  btn.textContent = '🧹 CLEAR CACHE ON HOST';
+                              }, 3000);
+                          })
+                          .catch(err => {
+                              btn.disabled = false;
+                              btn.textContent = '🧹 CLEAR CACHE ON HOST';
+                              showResponse(`Error: ${err.message}`, 'error');
+                          });
+                  }
+                  
+                  function showResponse(message, type) {
+                      const box = document.getElementById('responseBox');
+                      box.textContent = message;
+                      box.className = `response-box ${type}`;
+                      box.style.display = 'block';
+                  }
+                  
+                  // Initialize
+                  updateTimestamp();
+                  setInterval(updateTimestamp, 1000);
+                  
+                  // Check server status on load
+                  window.addEventListener('load', () => {
+                      setTimeout(() => {
+                          checkStatus();
+                      }, 500);
+                  });
+              </script>
+          </body>
+          </html>
+          EOFHTML
           
-          echo "✓ Script ready for execution"
+          echo "✓ Control panel HTML generated for $RUNNER_IP"
 
-      - name: Stop target browser
-        shell: bash
-        run: |
-          set -euo pipefail
-          
-          BROWSER="${{ github.event.inputs.target_browser || 'tor-browser' }}"
-          PLATFORM="${{ steps.platform.outputs.platform }}"
-          
-          echo "Stopping $BROWSER..."
-          
-          case "$BROWSER" in
-            tor-browser)
-              pkill -TERM -f "tor-browser" 2>/dev/null || true
-              pkill -TERM -f "firefox.real" 2>/dev/null || true
-              ;;
-            firefox)
-              pkill -TERM -f "firefox" 2>/dev/null || true
-              ;;
-            chrome)
-              pkill -TERM -f "chrome" 2>/dev/null || true
-              pkill -TERM -f "chromium" 2>/dev/null || true
-              ;;
-            edge)
-              pkill -TERM -f "microsoft-edge" 2>/dev/null || true
-              ;;
-          esac
-          
-          sleep 3
-          
-          echo "✓ Browser processes terminated"
+      - name: Upload control panel
+        uses: actions/upload-artifact@v4
+        with:
+          name: control-panel-${{ needs.get-runner-info.outputs.runner_ip }}
+          path: output/
+          retention-days: 7
 
-      - name: Execute cache clearing (Linux/macOS)
-        if: ${{ steps.platform.outputs.platform == 'linux' || steps.platform.outputs.platform == 'macos' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          
-          BROWSER="${{ github.event.inputs.target_browser || 'tor-browser' }}"
-          
-          echo "Executing cache clearing script for $BROWSER..."
-          
-          # Execute using the bash script path from reusable workflow
-          SCRIPT_PATH="${{ needs.generate-cache-script.outputs.bash_script_path }}"
-          
-          # Download and execute
-          bash -c "${{ needs.generate-cache-script.outputs.bash_script_path }}"
-          
-          echo "✓ Cache clearing completed"
-
-      - name: Execute cache clearing (Windows via PowerShell)
-        if: ${{ steps.platform.outputs.platform == 'windows' }}
-        shell: pwsh
-        run: |
-          $browser = "${{ github.event.inputs.target_browser || 'tor-browser' }}"
-          Write-Host "Executing cache clearing script for $browser..."
-          
-          # Execute PowerShell script
-          Write-Host "✓ Cache clearing completed"
-
-      - name: Generate execution report
-        if: always()
+      - name: Generate summary with link
         run: |
           cat >> $GITHUB_STEP_SUMMARY << EOF
-          ## Cache Clearing Execution Report
+          ## 🎛️ Cache Control Panel Ready
           
-          ### Configuration
-          - **Browser**: ${{ github.event.inputs.target_browser || 'tor-browser' }}
-          - **Website**: ${{ github.event.inputs.target_website || 'all' }}
-          - **Platform**: ${{ steps.platform.outputs.platform }}
-          - **Status**: ✓ Completed
+          ### 📍 Host Information
+          - **Hostname:** ${{ needs.get-runner-info.outputs.runner_hostname }}
+          - **IP Address:** ${{ needs.get-runner-info.outputs.runner_ip }}
+          - **Browser:** ${{ github.event.inputs.target_browser || 'tor-browser' }}
           
-          ### Actions Performed
-          - ✓ Browser process terminated
-          - ✓ Cache and cookies cleared
-          - ${{ github.event.inputs.reset_preferences == 'true' && '✓ Preferences reset' || '✗ Preferences preserved' }}
+          ### 🔗 Access Link
           
-          ### Available Scripts
-          Download all scripts from Artifacts:
-          - \`clear-${{ github.event.inputs.target_browser || 'tor-browser' }}-cache.sh\` (Linux/macOS)
-          - \`clear-${{ github.event.inputs.target_browser || 'tor-browser' }}-cache.ps1\` (Windows)
-          - \`clear-${{ github.event.inputs.target_browser || 'tor-browser' }}-cache.js\` (Node.js)
+          Open this link in your browser on the same network:
+          
+          **\`http://${{ needs.get-runner-info.outputs.runner_ip }}:8787\`**
+          
+          Or download the HTML file and open locally.
+          
+          ### 📥 Download
+          Download \`control-panel.html\` from Artifacts
+          
           EOF
+
+  start-local-server:
+    name: Start Local Web Server
+    needs: get-runner-info
+    runs-on: [self-hosted, tails-os]
+    timeout-minutes: 1440
+    
+    steps:
+      - name: Create cache clear server script
+        shell: bash
+        run: |
+          set -euo pipefail
+          
+          BROWSER="${{ github.event.inputs.target_browser || 'tor-browser' }}"
+          
+          cat > /tmp/cache-server.sh << 'EOFSERVER'
+          #!/bin/bash
+          
+          BROWSER="$BROWSER"
+          PORT=8787
+          
+          function clear_cache() {
+              echo "Clearing cache for $BROWSER..."
+              
+              case "$BROWSER" in
+                  tor-browser)
+                      pkill -9 -f "tor-browser\|firefox.real" 2>/dev/null || true
+                      sleep 2
+                      PROFILE_DIRS=(
+                          "$HOME/.tor-browser/profile.default"
+                          "$HOME/.tor-browser/profile.default-esr"
+                          "/home/amnesia/.tor-browser/profile.default"
+                      )
+                      for PROFILE_DIR in "${PROFILE_DIRS[@]}"; do
+                          if [ -d "$PROFILE_DIR" ]; then
+                              rm -f "$PROFILE_DIR/cookies.sqlite"* 2>/dev/null || true
+                              rm -f "$PROFILE_DIR/webappsstore.sqlite"* 2>/dev/null || true
+                              rm -f "$PROFILE_DIR/permissions.sqlite"* 2>/dev/null || true
+                              echo "✓ Cache cleared"
+                              return 0
+                          fi
+                      done
+                      ;;
+                  firefox)
+                      pkill -9 -f "firefox" 2>/dev/null || true
+                      sleep 2
+                      rm -rf "$HOME/.mozilla/firefox"/*/cache* 2>/dev/null || true
+                      rm -f "$HOME/.mozilla/firefox"/*/cookies.sqlite* 2>/dev/null || true
+                      echo "✓ Firefox cache cleared"
+                      return 0
+                      ;;
+                  chrome)
+                      pkill -9 -f "chrome\|chromium" 2>/dev/null || true
+                      sleep 2
+                      rm -rf "$HOME/.config/google-chrome/Default/Cache" 2>/dev/null || true
+                      rm -f "$HOME/.config/google-chrome/Default/Cookies"* 2>/dev/null || true
+                      echo "✓ Chrome cache cleared"
+                      return 0
+                      ;;
+              esac
+          }
+          
+          # Simple HTTP server using bash
+          mkfifo /tmp/http_fifo
+          
+          while true; do
+              (cat /tmp/http_fifo | nc -l -p $PORT -q 1 | while read line; do
+                  # Parse request
+                  if [[ $line == *"/clear"* ]]; then
+                      clear_cache
+                      echo -ne "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n\r\n{\"status\":\"success\",\"message\":\"Cache cleared successfully\"}"
+                  elif [[ $line == *"/status"* ]]; then
+                      echo -ne "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n\r\n{\"status\":\"online\",\"browser\":\"$BROWSER\"}"
+                  else
+                      echo -ne "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nOK"
+                  fi
+              done) > /tmp/http_fifo
+          done
+          EOFSERVER
+          
+          chmod +x /tmp/cache-server.sh
+          echo "✓ Server script created"
+
+      - name: Start HTTP server
+        shell: bash
+        run: |
+          set -euo pipefail
+          
+          echo "Starting local HTTP server on port 8787..."
+          
+          # Kill any existing server
+          pkill -f "cache-server.sh" 2>/dev/null || true
+          sleep 1
+          
+          # Start server in background
+          nohup /tmp/cache-server.sh > /tmp/cache-server.log 2>&1 &
+          SERVER_PID=$!
+          
+          echo "Server started with PID: $SERVER_PID"
+          sleep 2
+          
+          # Keep the job running
+          while true; do
+              if ! kill -0 $SERVER_PID 2>/dev/null; then
+                  echo "Server crashed, restarting..."
+                  nohup /tmp/cache-server.sh > /tmp/cache-server.log 2>&1 &
+                  SERVER_PID=$!
+              fi
+              sleep 10
+          done
