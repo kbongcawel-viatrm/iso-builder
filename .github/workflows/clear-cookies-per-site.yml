@@ -16,26 +16,21 @@ on:
           - 'tor-browser'
 
       target_website:
-        description: 'Target website to clear cache for (e.g., github.com, google.com)'
+        description: 'Target website to clear cache for'
         required: true
-        type: string
-
-      actor:
-        description: 'Actor/Username triggering this workflow'
-        required: false
         type: string
 
 jobs:
   generate-cache-script:
-    name: Generate Cache Clearing Script for User
+    name: Generate Cache Clearing Artifacts
     uses: ./.github/workflows/clear-cache-reusable.yml
     with:
       target_browser: ${{ github.event.inputs.target_browser }}
       target_website: ${{ github.event.inputs.target_website }}
       output_format: 'script'
 
-  generate-clickable-links:
-    name: Generate Clickable Links and Instructions
+  generate-web-interface:
+    name: Generate Mobile-Friendly Web Interface
     needs: generate-cache-script
     runs-on: ubuntu-latest
 
@@ -44,275 +39,609 @@ jobs:
       contents: read
 
     steps:
-      - name: Verify actor permissions
-        id: check-actor
-        run: |
-          TRIGGERED_BY="${{ github.actor }}"
-          echo "Workflow triggered by: $TRIGGERED_BY"
-          echo "✓ Permissions verified"
-
-      - name: Download generated script
-        run: |
-          set -euo pipefail
-          
-          mkdir -p cache-clearing-output
-          
-          # Store the script content
-          SCRIPT_CONTENT='${{ needs.generate-cache-script.outputs.script_content }}'
-          echo "$SCRIPT_CONTENT" > cache-clearing-output/clear-cache.sh
-          chmod +x cache-clearing-output/clear-cache.sh
-          
-          echo "✓ Script artifact retrieved"
-
-      - name: Generate browser-specific instructions
+      - name: Create mobile-friendly HTML interface
         run: |
           set -euo pipefail
           
           BROWSER="${{ github.event.inputs.target_browser }}"
           WEBSITE="${{ github.event.inputs.target_website }}"
-          OUTPUT_DIR="cache-clearing-output"
+          OUTPUT_DIR="web-interface"
           
           mkdir -p "$OUTPUT_DIR"
           
-          # Generate markdown instructions for different browsers
-          cat > "$OUTPUT_DIR/INSTRUCTIONS.md" << 'EOFMD'
-          # Cache Clearing Instructions
+          cat > "$OUTPUT_DIR/index.html" << 'EOFHTML'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Cache Clearer - $BROWSER</title>
+              <style>
+                  * {
+                      margin: 0;
+                      padding: 0;
+                      box-sizing: border-box;
+                  }
+                  
+                  body {
+                      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                      min-height: 100vh;
+                      display: flex;
+                      align-items: center;
+                      justify-content: center;
+                      padding: 20px;
+                  }
+                  
+                  .container {
+                      background: white;
+                      border-radius: 16px;
+                      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+                      max-width: 500px;
+                      width: 100%;
+                      overflow: hidden;
+                  }
+                  
+                  .header {
+                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                      color: white;
+                      padding: 40px 20px;
+                      text-align: center;
+                  }
+                  
+                  .header h1 {
+                      font-size: 28px;
+                      margin-bottom: 10px;
+                  }
+                  
+                  .header p {
+                      opacity: 0.9;
+                      font-size: 14px;
+                  }
+                  
+                  .content {
+                      padding: 30px 20px;
+                  }
+                  
+                  .config-box {
+                      background: #f8f9fa;
+                      border-radius: 12px;
+                      padding: 20px;
+                      margin-bottom: 25px;
+                      border-left: 4px solid #667eea;
+                  }
+                  
+                  .config-item {
+                      margin-bottom: 15px;
+                  }
+                  
+                  .config-item:last-child {
+                      margin-bottom: 0;
+                  }
+                  
+                  .config-label {
+                      font-size: 12px;
+                      text-transform: uppercase;
+                      color: #666;
+                      font-weight: 600;
+                      margin-bottom: 5px;
+                      letter-spacing: 0.5px;
+                  }
+                  
+                  .config-value {
+                      font-size: 18px;
+                      font-weight: 600;
+                      color: #333;
+                      word-break: break-all;
+                  }
+                  
+                  .browser-icon {
+                      display: inline-block;
+                      width: 32px;
+                      height: 32px;
+                      margin-right: 10px;
+                      vertical-align: middle;
+                  }
+                  
+                  .action-section {
+                      margin-bottom: 25px;
+                  }
+                  
+                  .action-title {
+                      font-size: 14px;
+                      font-weight: 600;
+                      text-transform: uppercase;
+                      color: #666;
+                      margin-bottom: 15px;
+                      letter-spacing: 0.5px;
+                  }
+                  
+                  .button-group {
+                      display: flex;
+                      gap: 10px;
+                      flex-wrap: wrap;
+                  }
+                  
+                  button {
+                      flex: 1;
+                      min-width: 140px;
+                      padding: 15px;
+                      border: none;
+                      border-radius: 8px;
+                      font-size: 14px;
+                      font-weight: 600;
+                      cursor: pointer;
+                      transition: all 0.3s ease;
+                      text-transform: uppercase;
+                      letter-spacing: 0.5px;
+                  }
+                  
+                  .btn-primary {
+                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                      color: white;
+                  }
+                  
+                  .btn-primary:hover {
+                      transform: translateY(-2px);
+                      box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+                  }
+                  
+                  .btn-secondary {
+                      background: #e8eef7;
+                      color: #667eea;
+                  }
+                  
+                  .btn-secondary:hover {
+                      background: #d4ddf0;
+                  }
+                  
+                  .btn-success {
+                      background: #4caf50;
+                      color: white;
+                  }
+                  
+                  .btn-success:hover {
+                      background: #45a049;
+                      transform: translateY(-2px);
+                  }
+                  
+                  .btn-disabled {
+                      opacity: 0.6;
+                      cursor: not-allowed;
+                  }
+                  
+                  .instructions {
+                      background: #fff3cd;
+                      border-left: 4px solid #ffc107;
+                      border-radius: 8px;
+                      padding: 15px;
+                      margin-bottom: 20px;
+                      font-size: 13px;
+                      line-height: 1.6;
+                  }
+                  
+                  .instructions p {
+                      margin-bottom: 10px;
+                  }
+                  
+                  .instructions ol {
+                      margin-left: 20px;
+                      margin-bottom: 10px;
+                  }
+                  
+                  .instructions li {
+                      margin-bottom: 8px;
+                  }
+                  
+                  .code-block {
+                      background: #f5f5f5;
+                      border: 1px solid #ddd;
+                      border-radius: 6px;
+                      padding: 12px;
+                      font-family: "Courier New", monospace;
+                      font-size: 12px;
+                      overflow-x: auto;
+                      margin: 10px 0;
+                      line-height: 1.4;
+                  }
+                  
+                  .copy-btn {
+                      font-size: 11px;
+                      padding: 6px 12px;
+                      margin-top: 8px;
+                      min-width: auto;
+                      width: 100%;
+                  }
+                  
+                  .status-message {
+                      display: none;
+                      padding: 15px;
+                      border-radius: 8px;
+                      margin-bottom: 20px;
+                      font-size: 14px;
+                  }
+                  
+                  .status-success {
+                      background: #d4edda;
+                      color: #155724;
+                      border: 1px solid #c3e6cb;
+                  }
+                  
+                  .status-error {
+                      background: #f8d7da;
+                      color: #721c24;
+                      border: 1px solid #f5c6cb;
+                  }
+                  
+                  .tabs {
+                      display: flex;
+                      gap: 10px;
+                      margin-bottom: 20px;
+                      border-bottom: 2px solid #e0e0e0;
+                  }
+                  
+                  .tab-button {
+                      flex: 1;
+                      padding: 12px;
+                      background: none;
+                      border: none;
+                      border-bottom: 3px solid transparent;
+                      color: #666;
+                      font-weight: 600;
+                      cursor: pointer;
+                      transition: all 0.3s;
+                      margin-bottom: -2px;
+                  }
+                  
+                  .tab-button.active {
+                      color: #667eea;
+                      border-bottom-color: #667eea;
+                  }
+                  
+                  .tab-content {
+                      display: none;
+                  }
+                  
+                  .tab-content.active {
+                      display: block;
+                  }
+                  
+                  .progress-bar {
+                      width: 100%;
+                      height: 4px;
+                      background: #e0e0e0;
+                      border-radius: 2px;
+                      overflow: hidden;
+                      margin: 20px 0;
+                  }
+                  
+                  .progress-fill {
+                      height: 100%;
+                      background: linear-gradient(90deg, #667eea, #764ba2);
+                      width: 0%;
+                      transition: width 0.3s ease;
+                  }
+                  
+                  .footer {
+                      text-align: center;
+                      padding: 15px;
+                      background: #f8f9fa;
+                      font-size: 12px;
+                      color: #999;
+                      border-top: 1px solid #e0e0e0;
+                  }
+                  
+                  @media (max-width: 480px) {
+                      .content {
+                          padding: 20px 15px;
+                      }
+                      
+                      button {
+                          min-width: 100%;
+                      }
+                      
+                      .button-group {
+                          flex-direction: column;
+                      }
+                  }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <div class="header">
+                      <h1>🧹 Cache Clearer</h1>
+                      <p>Clear cache and cookies safely</p>
+                  </div>
+                  
+                  <div class="content">
+                      <div id="statusMessage" class="status-message"></div>
+                      
+                      <div class="config-box">
+                          <div class="config-item">
+                              <div class="config-label">Browser</div>
+                              <div class="config-value">
+                                  <span id="browserName">$BROWSER</span>
+                              </div>
+                          </div>
+                          <div class="config-item">
+                              <div class="config-label">Website</div>
+                              <div class="config-value">
+                                  <span id="websiteName">$WEBSITE</span>
+                              </div>
+                          </div>
+                          <div class="config-item">
+                              <div class="config-label">Requested By</div>
+                              <div class="config-value">
+                                  <span id="actorName">GitHub Actions</span>
+                              </div>
+                          </div>
+                      </div>
+                      
+                      <div class="action-section">
+                          <div class="action-title">📋 Instructions</div>
+                          <div class="tabs">
+                              <button class="tab-button active" onclick="switchTab('automated')">Automated</button>
+                              <button class="tab-button" onclick="switchTab('manual')">Manual</button>
+                          </div>
+                          
+                          <div id="automated" class="tab-content active">
+                              <div class="instructions">
+                                  <p><strong>Automated Method (Recommended):</strong></p>
+                                  <ol>
+                                      <li>Download the cache clearing script</li>
+                                      <li>Run the script on your computer</li>
+                                      <li>Browser cache will be automatically cleared</li>
+                                  </ol>
+                              </div>
+                          </div>
+                          
+                          <div id="manual" class="tab-content">
+                              <div class="instructions" id="manualInstructions">
+                                  <p><strong>Manual Method:</strong></p>
+                                  <p>Follow these steps to manually clear cache in $BROWSER</p>
+                              </div>
+                          </div>
+                      </div>
+                      
+                      <div class="action-section">
+                          <div class="action-title">⚙️ Download & Run</div>
+                          <div class="button-group">
+                              <button class="btn-primary" onclick="downloadScript('sh')">📥 Linux/Mac</button>
+                              <button class="btn-primary" onclick="downloadScript('ps1')">📥 Windows</button>
+                          </div>
+                          <div class="button-group" style="margin-top: 10px;">
+                              <button class="btn-secondary" onclick="downloadScript('js')">📥 Node.js</button>
+                              <button class="btn-secondary" onclick="copyCommand()">📋 Copy Command</button>
+                          </div>
+                      </div>
+                      
+                      <div class="action-section">
+                          <div class="action-title">🔧 Quick Commands</div>
+                          <div id="quickCommand" class="code-block"></div>
+                          <button class="btn-secondary copy-btn" onclick="copyQuickCommand()">Copy Command</button>
+                      </div>
+                  </div>
+                  
+                  <div class="footer">
+                      Generated on: <span id="timestamp"></span>
+                      <br>
+                      Workflow Run: <a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" target="_blank">View Details</a>
+                  </div>
+              </div>
+              
+              <script>
+                  const BROWSER = '$BROWSER';
+                  const WEBSITE = '$WEBSITE';
+                  const ACTOR = '${{ github.actor }}';
+                  
+                  // Set timestamp
+                  document.getElementById('timestamp').textContent = new Date().toLocaleString();
+                  document.getElementById('actorName').textContent = ACTOR || 'Anonymous';
+                  
+                  // Browser-specific instructions
+                  const manualInstructions = {
+                      firefox: `
+                          <p><strong>Firefox:</strong></p>
+                          <ol>
+                              <li>Click the hamburger menu (☰) in the top right</li>
+                              <li>Select "History" → "Clear Recent History"</li>
+                              <li>Choose "Everything" for Time Range</li>
+                              <li>Check "Cookies" and "Cache"</li>
+                              <li>Click "Clear Now"</li>
+                          </ol>
+                      `,
+                      chrome: `
+                          <p><strong>Google Chrome:</strong></p>
+                          <ol>
+                              <li>Press Ctrl+Shift+Delete (or Cmd+Shift+Delete on Mac)</li>
+                              <li>Select "All time" for Time range</li>
+                              <li>Check "Cookies and other site data" and "Cached images and files"</li>
+                              <li>Click "Clear data"</li>
+                          </ol>
+                      `,
+                      safari: `
+                          <p><strong>Safari:</strong></p>
+                          <ol>
+                              <li>Click "Safari" in menu bar</li>
+                              <li>Select "Clear History..."</li>
+                              <li>Choose "All history"</li>
+                              <li>Click "Clear History"</li>
+                          </ol>
+                      `,
+                      edge: `
+                          <p><strong>Microsoft Edge:</strong></p>
+                          <ol>
+                              <li>Press Ctrl+Shift+Delete</li>
+                              <li>Select "All time"</li>
+                              <li>Check "Cookies and other site data" and "Cached images and files"</li>
+                              <li>Click "Clear now"</li>
+                          </ol>
+                      `,
+                      'tor-browser': `
+                          <p><strong>Tor Browser:</strong></p>
+                          <ol>
+                              <li>Click the hamburger menu (☰)</li>
+                              <li>Select "History" → "Clear Recent History"</li>
+                              <li>Choose "Everything"</li>
+                              <li>Check "Cookies" and "Cache"</li>
+                              <li>Click "Clear Now"</li>
+                          </ol>
+                      `
+                  };
+                  
+                  const quickCommands = {
+                      firefox: 'pkill firefox && rm -rf ~/.mozilla/firefox/*/cache* ~/.mozilla/firefox/*/cookies.sqlite*',
+                      chrome: 'pkill chrome && rm -rf ~/.config/google-chrome/Default/Cache*',
+                      safari: 'rm -rf ~/Library/Caches/com.apple.Safari',
+                      edge: 'pkill microsoft-edge && rm -rf ~/.config/microsoft-edge/Default/Cache*',
+                      'tor-browser': 'pkill tor-browser && rm -f ~/.tor-browser/profile.default*/cookies.sqlite*'
+                  };
+                  
+                  function switchTab(tabName) {
+                      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+                      document.querySelectorAll('.tab-button').forEach(el => el.classList.remove('active'));
+                      document.getElementById(tabName).classList.add('active');
+                      event.target.classList.add('active');
+                  }
+                  
+                  function downloadScript(type) {
+                      const scripts = {
+                          'sh': 'clear-$BROWSER-cache.sh',
+                          'ps1': 'clear-$BROWSER-cache.ps1',
+                          'js': 'clear-$BROWSER-cache.js'
+                      };
+                      alert('Download: ' + scripts[type] + '\n\nThis file is available in the GitHub Actions workflow artifacts.');
+                  }
+                  
+                  function copyCommand() {
+                      const cmd = quickCommands[BROWSER] || '';
+                      if (cmd) {
+                          navigator.clipboard.writeText(cmd).then(() => {
+                              showStatus('✓ Command copied to clipboard!', 'success');
+                          });
+                      }
+                  }
+                  
+                  function copyQuickCommand() {
+                      copyCommand();
+                  }
+                  
+                  function showStatus(message, type) {
+                      const statusEl = document.getElementById('statusMessage');
+                      statusEl.textContent = message;
+                      statusEl.className = 'status-message status-' + type;
+                      statusEl.style.display = 'block';
+                      setTimeout(() => {
+                          statusEl.style.display = 'none';
+                      }, 3000);
+                  }
+                  
+                  // Set up quick command
+                  const quickCmd = quickCommands[BROWSER];
+                  if (quickCmd) {
+                      document.getElementById('quickCommand').textContent = quickCmd;
+                  }
+                  
+                  // Set up manual instructions
+                  const manualInst = manualInstructions[BROWSER];
+                  if (manualInst) {
+                      document.getElementById('manualInstructions').innerHTML = manualInst;
+                  }
+              </script>
+          </body>
+          </html>
+          EOFHTML
           
-          Generated for: **$BROWSER**  
-          Website: **$WEBSITE**  
-          Triggered by: **${{ github.actor }}**  
-          Timestamp: **$(date -u)**
-          
-          ## Option 1: Run the Automated Script (Recommended)
-          
-          ```bash
-          # Download and run the cache clearing script
-          bash clear-cache.sh
-          ```
-          
-          ## Option 2: Manual Cache Clearing
-          
-          EOFMD
-          
-          case "$BROWSER" in
-            firefox)
-              cat >> "$OUTPUT_DIR/INSTRUCTIONS.md" << 'EOFMD'
-          ### Firefox Manual Steps
-          
-          1. **Close Firefox completely**
-             ```bash
-             pkill -9 firefox
-             ```
-          
-          2. **Clear cache directories**
-             ```bash
-             rm -rf ~/.mozilla/firefox/*/cache*
-             rm -rf ~/.mozilla/firefox/*/cookies.sqlite*
-             rm -rf ~/.mozilla/firefox/*/storage
-             rm -rf ~/.mozilla/firefox/*/indexedDB
-             ```
-          
-          3. **Restart Firefox**
-             ```bash
-             firefox &
-             ```
-          EOFMD
-              ;;
-            chrome)
-              cat >> "$OUTPUT_DIR/INSTRUCTIONS.md" << 'EOFMD'
-          ### Google Chrome Manual Steps
-          
-          1. **Close Chrome completely**
-             ```bash
-             pkill -9 chrome
-             pkill -9 chromium
-             ```
-          
-          2. **Clear cache directories**
-             ```bash
-             rm -rf ~/.config/google-chrome/Default/Cache*
-             rm -rf ~/.config/google-chrome/Default/Code Cache
-             rm -f ~/.config/google-chrome/Default/Cookies*
-             ```
-          
-          3. **Restart Chrome**
-             ```bash
-             google-chrome &
-             ```
-          EOFMD
-              ;;
-            safari)
-              cat >> "$OUTPUT_DIR/INSTRUCTIONS.md" << 'EOFMD'
-          ### Safari Manual Steps
-          
-          1. **Close Safari completely**
-          
-          2. **Clear cache from Safari menu**
-             - Open Safari
-             - Menu → History → Clear History...
-             - Select "All history"
-             - Click "Clear History"
-          
-          3. **Clear cache directories (optional)**
-             ```bash
-             rm -rf ~/Library/Caches/com.apple.Safari
-             rm -rf ~/Library/Safari/History.db*
-             rm -rf ~/Library/Safari/TopSites.plist
-             ```
-          EOFMD
-              ;;
-            edge)
-              cat >> "$OUTPUT_DIR/INSTRUCTIONS.md" << 'EOFMD'
-          ### Microsoft Edge Manual Steps
-          
-          1. **Close Edge completely**
-             ```bash
-             pkill -9 microsoft-edge
-             ```
-          
-          2. **Clear cache directories**
-             ```bash
-             rm -rf ~/.config/microsoft-edge/Default/Cache*
-             rm -rf ~/.config/microsoft-edge/Default/Code Cache
-             rm -f ~/.config/microsoft-edge/Default/Cookies*
-             ```
-          
-          3. **Restart Edge**
-             ```bash
-             microsoft-edge &
-             ```
-          EOFMD
-              ;;
-            tor-browser)
-              cat >> "$OUTPUT_DIR/INSTRUCTIONS.md" << 'EOFMD'
-          ### Tor Browser Manual Steps
-          
-          1. **Close Tor Browser completely**
-             ```bash
-             pkill -9 tor-browser
-             pkill -9 firefox.real
-             ```
-          
-          2. **Clear cache directories**
-             ```bash
-             # Find your Tor Browser profile
-             rm -f ~/.tor-browser/profile.default*/cookies.sqlite*
-             rm -f ~/.tor-browser/profile.default*/webappsstore.sqlite*
-             rm -f ~/.tor-browser/profile.default*/permissions.sqlite*
-             ```
-          
-          3. **Restart Tor Browser**
-             ```bash
-             tor-browser &
-             ```
-          EOFMD
-              ;;
-          esac
+          echo "✓ Mobile-friendly web interface created"
 
-      - name: Create downloadable script artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: cache-clearing-script-${{ github.event.inputs.target_browser }}-${{ github.run_id }}
-          path: cache-clearing-output/
-          retention-days: 7
-
-      - name: Generate clickable action links
+      - name: Create instruction documents
         run: |
           set -euo pipefail
           
           BROWSER="${{ github.event.inputs.target_browser }}"
           WEBSITE="${{ github.event.inputs.target_website }}"
+          OUTPUT_DIR="web-interface"
           
-          mkdir -p cache-clearing-output
-          
-          # Create a shell command that can be copied and executed
-          cat > cache-clearing-output/QUICK_LINKS.md << 'EOFLINKS'
-          # Quick Action Links
-          
-          ## For ${{ github.actor }}
+          cat > "$OUTPUT_DIR/README.md" << 'EOFMD'
+          # Cache Clearing Instructions
           
           **Browser:** $BROWSER  
           **Website:** $WEBSITE  
+          **Generated:** $(date)
           
-          ### 🚀 Quick Actions
+          ## Quick Start
           
-          Copy and paste one of these commands in your terminal:
+          ### Method 1: Open in Browser (Mobile-Friendly)
           
-          #### Option 1: Run the generated script
-          ```
-          bash clear-cache.sh
-          ```
+          Open `index.html` in any web browser on your phone or computer.
           
-          #### Option 2: One-liner cache clear
-          EOFLINKS
+          ### Method 2: Download Script
           
-          case "$BROWSER" in
-            firefox)
-              echo '```bash' >> cache-clearing-output/QUICK_LINKS.md
-              echo 'pkill -9 firefox && sleep 2 && rm -rf ~/.mozilla/firefox/*/cache* ~/.mozilla/firefox/*/cookies.sqlite* && firefox &' >> cache-clearing-output/QUICK_LINKS.md
-              echo '```' >> cache-clearing-output/QUICK_LINKS.md
-              ;;
-            chrome)
-              echo '```bash' >> cache-clearing-output/QUICK_LINKS.md
-              echo 'pkill -9 chrome && sleep 2 && rm -rf ~/.config/google-chrome/Default/Cache* ~/.config/google-chrome/Default/Code\ Cache && google-chrome &' >> cache-clearing-output/QUICK_LINKS.md
-              echo '```' >> cache-clearing-output/QUICK_LINKS.md
-              ;;
-            safari)
-              echo '```bash' >> cache-clearing-output/QUICK_LINKS.md
-              echo 'rm -rf ~/Library/Caches/com.apple.Safari ~/Library/Safari/History.db*' >> cache-clearing-output/QUICK_LINKS.md
-              echo '```' >> cache-clearing-output/QUICK_LINKS.md
-              ;;
-            edge)
-              echo '```bash' >> cache-clearing-output/QUICK_LINKS.md
-              echo 'pkill -9 microsoft-edge && sleep 2 && rm -rf ~/.config/microsoft-edge/Default/Cache* && microsoft-edge &' >> cache-clearing-output/QUICK_LINKS.md
-              echo '```' >> cache-clearing-output/QUICK_LINKS.md
-              ;;
-            tor-browser)
-              echo '```bash' >> cache-clearing-output/QUICK_LINKS.md
-              echo 'pkill -9 tor-browser firefox.real && sleep 2 && rm -f ~/.tor-browser/profile.default*/cookies.sqlite* && tor-browser &' >> cache-clearing-output/QUICK_LINKS.md
-              echo '```' >> cache-clearing-output/QUICK_LINKS.md
-              ;;
-          esac
+          Download the appropriate script for your operating system:
+          - **Linux/macOS:** `clear-$BROWSER-cache.sh`
+          - **Windows:** `clear-$BROWSER-cache.ps1`
+          - **Node.js:** `clear-$BROWSER-cache.js`
           
-          cat >> cache-clearing-output/QUICK_LINKS.md << 'EOFLINKS'
+          Run the downloaded script to automatically clear the cache.
           
-          ---
+          ### Method 3: Manual Commands
           
-          ### 📥 Downloads Available
-          - `clear-cache.sh` - Automated cache clearing script
-          - `INSTRUCTIONS.md` - Detailed instructions
-          
-          All files are available in the **Artifacts** section of this workflow run.
-          EOFLINKS
+          Copy and paste the quick command for your system.
+          EOFMD
 
-      - name: Generate workflow summary with clickable instructions
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cache-clearing-web-interface
+          path: web-interface/
+          retention-days: 7
+
+      - name: Generate workflow summary
         run: |
           cat >> $GITHUB_STEP_SUMMARY << EOF
-          ## Cache Clearing Instructions Generated
+          ## Cache Clearing Web Interface Generated
           
-          ### Target Configuration
+          ### 📱 Mobile-Friendly Interface
           - **Browser**: ${{ github.event.inputs.target_browser }}
           - **Website**: ${{ github.event.inputs.target_website }}
           - **Requested by**: ${{ github.actor }}
           
-          ### 📋 Download Your Cache Clearing Script
+          ### 📥 Available Downloads
           
-          The following files are ready for download in the **Artifacts** section:
+          All files are ready for download:
           
-          1. **clear-cache.sh** - Automated cache clearing script
-          2. **INSTRUCTIONS.md** - Detailed step-by-step instructions
-          3. **QUICK_LINKS.md** - Quick copy-paste commands
+          1. **index.html** - Mobile-friendly web interface
+             - Open in any browser on your phone or computer
+             - Interactive instructions and one-click commands
           
-          ### 🚀 Quick Start
+          2. **clear-${{ github.event.inputs.target_browser }}-cache.sh**
+             - For Linux and macOS
           
-          1. Download the artifacts
-          2. Extract the files
-          3. Run: \`bash clear-cache.sh\`
+          3. **clear-${{ github.event.inputs.target_browser }}-cache.ps1**
+             - For Windows PowerShell
           
-          Or follow the manual instructions in **INSTRUCTIONS.md**
+          4. **clear-${{ github.event.inputs.target_browser }}-cache.js**
+             - For Node.js (platform-agnostic)
+          
+          5. **README.md** - Full instructions
+          
+          ### 🚀 How to Use
+          
+          **On Desktop/Laptop:**
+          - Download the script for your OS
+          - Run it in terminal/PowerShell
+          
+          **On Mobile:**
+          1. Download \`index.html\`
+          2. Open it in your phone's browser
+          3. Follow the interactive instructions
+          4. Or copy the quick command and paste it
+          
+          ### 📍 Link to Artifacts
+          
+          [Download All Files](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
           
           ---
           
-          **Generated**: $(date -u)  
-          **Workflow Run**: [View Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          **Timestamp**: $(date -u)
           EOF
