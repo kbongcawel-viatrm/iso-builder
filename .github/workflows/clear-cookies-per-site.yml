@@ -1,79 +1,599 @@
-name: Reset Tor Browser Data on Tails Linux
+name: Clear Cookies Per Site
 
 on:
-  schedule:
-    - cron: "0 23 * * *"
-
   workflow_dispatch:
     inputs:
       target_browser:
         description: 'Target browser to clear cache'
         required: true
-        default: 'tor-browser'
+        default: 'firefox'
         type: choice
         options:
-          - 'tor-browser'
           - 'firefox'
           - 'chrome'
+          - 'safari'
           - 'edge'
+          - 'tor-browser'
 
       target_website:
-        description: 'Target website to clear cache for (or "all")'
+        description: 'Target website to clear cache for'
         required: true
-        default: 'all'
         type: string
 
 jobs:
-  get-runner-info:
-    name: Get Runner IP Address
-    runs-on: [self-hosted, tails-os]
-    timeout-minutes: 2
-    outputs:
-      runner_ip: ${{ steps.get-ip.outputs.ip }}
-      runner_hostname: ${{ steps.get-ip.outputs.hostname }}
-    
-    steps:
-      - name: Get local IP address
-        id: get-ip
-        shell: bash
-        run: |
-          set -euo pipefail
-          
-          # Try to get IP from multiple sources
-          IP=$(hostname -I | awk '{print $1}' 2>/dev/null || \
-               ifconfig | grep -A1 "inet " | head -1 | awk '{print $2}' | cut -d: -f2 2>/dev/null || \
-               ip addr show | grep "inet " | grep -v "127.0.0.1" | awk '{print $2}' | cut -d/ -f1 | head -1 2>/dev/null || \
-               echo "localhost")
-          
-          HOSTNAME=$(hostname 2>/dev/null || echo "tails-runner")
-          
-          echo "ip=$IP" >> "$GITHUB_OUTPUT"
-          echo "hostname=$HOSTNAME" >> "$GITHUB_OUTPUT"
-          
-          echo "✓ Runner IP: $IP"
-          echo "✓ Hostname: $HOSTNAME"
-
-  generate-html-control-panel:
-    name: Generate HTML Control Panel
-    needs: get-runner-info
+  generate-interactive-cache-clearer:
+    name: Generate Interactive Cache Clearing Interface
     runs-on: ubuntu-latest
-    
+
     steps:
-      - name: Create control panel HTML
+      - name: Create interactive HTML cache clearer
         run: |
           set -euo pipefail
           
-          RUNNER_IP="${{ needs.get-runner-info.outputs.runner_ip }}"
-          RUNNER_HOSTNAME="${{ needs.get-runner-info.outputs.runner_hostname }}"
-          BROWSER="${{ github.event.inputs.target_browser || 'tor-browser' }}"
-          WEBSITE="${{ github.event.inputs.target_website || 'all' }}"
+          BROWSER="${{ github.event.inputs.target_browser }}"
+          WEBSITE="${{ github.event.inputs.target_website }}"
+          ACTOR="${{ github.actor }}"
+          RUN_ID="${{ github.run_id }}"
           
           mkdir -p output
           
-          cat > output/control-panel.html << 'EOFHTML'
+          cat > output/clear-cache.html << 'EOFHTML'
           <!DOCTYPE html>
           <html lang="en">
           <head>
               <meta charset="UTF-8">
               <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>Cache Clear Control - Local*
+              <title>Clear Cache - One Click</title>
+              <style>
+                  * {
+                      margin: 0;
+                      padding: 0;
+                      box-sizing: border-box;
+                  }
+                  
+                  body {
+                      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                      min-height: 100vh;
+                      display: flex;
+                      align-items: center;
+                      justify-content: center;
+                      padding: 20px;
+                  }
+                  
+                  .container {
+                      background: white;
+                      border-radius: 20px;
+                      box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+                      max-width: 600px;
+                      width: 100%;
+                      overflow: hidden;
+                  }
+                  
+                  .header {
+                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                      color: white;
+                      padding: 50px 30px;
+                      text-align: center;
+                  }
+                  
+                  .header h1 {
+                      font-size: 36px;
+                      margin-bottom: 15px;
+                  }
+                  
+                  .header p {
+                      opacity: 0.95;
+                      font-size: 16px;
+                      margin-bottom: 10px;
+                  }
+                  
+                  .content {
+                      padding: 40px 30px;
+                  }
+                  
+                  .info-box {
+                      background: #f0f4ff;
+                      border-left: 4px solid #667eea;
+                      border-radius: 8px;
+                      padding: 20px;
+                      margin-bottom: 30px;
+                  }
+                  
+                  .info-item {
+                      display: flex;
+                      justify-content: space-between;
+                      margin-bottom: 12px;
+                      font-size: 15px;
+                  }
+                  
+                  .info-item:last-child {
+                      margin-bottom: 0;
+                  }
+                  
+                  .info-label {
+                      font-weight: 600;
+                      color: #333;
+                  }
+                  
+                  .info-value {
+                      color: #667eea;
+                      font-weight: 500;
+                  }
+                  
+                  .big-button {
+                      width: 100%;
+                      padding: 20px;
+                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                      color: white;
+                      border: none;
+                      border-radius: 12px;
+                      font-size: 18px;
+                      font-weight: 600;
+                      cursor: pointer;
+                      transition: all 0.3s ease;
+                      margin-bottom: 15px;
+                      text-transform: uppercase;
+                      letter-spacing: 1px;
+                      box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+                  }
+                  
+                  .big-button:hover {
+                      transform: translateY(-3px);
+                      box-shadow: 0 15px 40px rgba(102, 126, 234, 0.4);
+                  }
+                  
+                  .big-button:active {
+                      transform: translateY(-1px);
+                  }
+                  
+                  .big-button.success {
+                      background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
+                  }
+                  
+                  .big-button.disabled {
+                      opacity: 0.5;
+                      cursor: not-allowed;
+                      transform: none;
+                  }
+                  
+                  .instruction-section {
+                      margin-bottom: 30px;
+                  }
+                  
+                  .section-title {
+                      font-size: 16px;
+                      font-weight: 700;
+                      color: #333;
+                      margin-bottom: 15px;
+                      text-transform: uppercase;
+                      letter-spacing: 0.5px;
+                  }
+                  
+                  .instruction-step {
+                      background: #f8f9fa;
+                      border-radius: 8px;
+                      padding: 15px;
+                      margin-bottom: 10px;
+                      font-size: 14px;
+                      line-height: 1.6;
+                  }
+                  
+                  .step-number {
+                      display: inline-block;
+                      width: 28px;
+                      height: 28px;
+                      background: #667eea;
+                      color: white;
+                      border-radius: 50%;
+                      text-align: center;
+                      line-height: 28px;
+                      font-weight: 600;
+                      margin-right: 10px;
+                  }
+                  
+                  .command-box {
+                      background: #1e1e1e;
+                      color: #00ff00;
+                      border-radius: 8px;
+                      padding: 15px;
+                      font-family: "Courier New", monospace;
+                      font-size: 13px;
+                      overflow-x: auto;
+                      margin: 15px 0;
+                      line-height: 1.5;
+                      border: 1px solid #333;
+                  }
+                  
+                  .copy-cmd-btn {
+                      width: 100%;
+                      padding: 12px;
+                      background: #333;
+                      color: #00ff00;
+                      border: 1px solid #00ff00;
+                      border-radius: 6px;
+                      cursor: pointer;
+                      font-family: monospace;
+                      font-size: 12px;
+                      margin-top: 10px;
+                      transition: all 0.3s;
+                  }
+                  
+                  .copy-cmd-btn:hover {
+                      background: #00ff00;
+                      color: #1e1e1e;
+                  }
+                  
+                  .status-box {
+                      display: none;
+                      padding: 15px;
+                      border-radius: 8px;
+                      margin-bottom: 20px;
+                      font-size: 14px;
+                      text-align: center;
+                  }
+                  
+                  .status-success {
+                      background: #d4edda;
+                      color: #155724;
+                      border: 1px solid #c3e6cb;
+                  }
+                  
+                  .status-info {
+                      background: #d1ecf1;
+                      color: #0c5460;
+                      border: 1px solid #bee5eb;
+                  }
+                  
+                  .status-error {
+                      background: #f8d7da;
+                      color: #721c24;
+                      border: 1px solid #f5c6cb;
+                  }
+                  
+                  .tabs {
+                      display: flex;
+                      gap: 10px;
+                      margin-bottom: 20px;
+                      border-bottom: 2px solid #e0e0e0;
+                  }
+                  
+                  .tab-button {
+                      flex: 1;
+                      padding: 12px;
+                      background: none;
+                      border: none;
+                      border-bottom: 3px solid transparent;
+                      color: #999;
+                      font-weight: 600;
+                      cursor: pointer;
+                      transition: all 0.3s;
+                      margin-bottom: -2px;
+                  }
+                  
+                  .tab-button.active {
+                      color: #667eea;
+                      border-bottom-color: #667eea;
+                  }
+                  
+                  .tab-content {
+                      display: none;
+                  }
+                  
+                  .tab-content.active {
+                      display: block;
+                  }
+                  
+                  .footer {
+                      text-align: center;
+                      padding: 20px;
+                      background: #f8f9fa;
+                      font-size: 12px;
+                      color: #999;
+                      border-top: 1px solid #e0e0e0;
+                  }
+                  
+                  .footer a {
+                      color: #667eea;
+                      text-decoration: none;
+                  }
+                  
+                  .warning {
+                      background: #fff3cd;
+                      border-left: 4px solid #ffc107;
+                      padding: 15px;
+                      border-radius: 6px;
+                      margin-bottom: 20px;
+                      font-size: 14px;
+                      color: #856404;
+                  }
+                  
+                  @media (max-width: 500px) {
+                      .content {
+                          padding: 25px 20px;
+                      }
+                      
+                      .header {
+                          padding: 35px 20px;
+                      }
+                      
+                      .header h1 {
+                          font-size: 28px;
+                      }
+                      
+                      .info-item {
+                          flex-direction: column;
+                      }
+                      
+                      .info-value {
+                          margin-top: 5px;
+                      }
+                  }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <div class="header">
+                      <h1>🧹</h1>
+                      <h1>Clear Cache</h1>
+                      <p>One-Click Cache Cleaning Tool</p>
+                  </div>
+                  
+                  <div class="content">
+                      <div id="statusBox" class="status-box"></div>
+                      
+                      <div class="info-box">
+                          <div class="info-item">
+                              <span class="info-label">Browser:</span>
+                              <span class="info-value" id="browserVal">$BROWSER</span>
+                          </div>
+                          <div class="info-item">
+                              <span class="info-label">Website:</span>
+                              <span class="info-value" id="websiteVal">$WEBSITE</span>
+                          </div>
+                          <div class="info-item">
+                              <span class="info-label">Requested By:</span>
+                              <span class="info-value">$ACTOR</span>
+                          </div>
+                      </div>
+                      
+                      <div class="warning">
+                          ⚠️ <strong>Important:</strong> Close your $BROWSER completely before running the cache clear command.
+                      </div>
+                      
+                      <button class="big-button" onclick="copyToClipboard()">
+                          📋 COPY COMMAND TO CLIPBOARD
+                      </button>
+                      
+                      <div class="tabs">
+                          <button class="tab-button active" onclick="switchTab('instructions')">Instructions</button>
+                          <button class="tab-button" onclick="switchTab('command')">Command</button>
+                      </div>
+                      
+                      <div id="instructions" class="tab-content active">
+                          <div class="instruction-section">
+                              <div class="section-title">📱 For Mobile/Phone Users:</div>
+                              <div class="instruction-step">
+                                  <strong>Note:</strong> Mobile browsers have built-in cache clearing. Use these steps:
+                                  <br><br>
+                                  <div class="step-number">1</div> Open your $BROWSER settings
+                                  <br><br>
+                                  <div class="step-number">2</div> Find "Clear Browsing Data" or "Clear Cache"
+                                  <br><br>
+                                  <div class="step-number">3</div> Select "All Time"
+                                  <br><br>
+                                  <div class="step-number">4</div> Check: Cookies, Cache, Site Data
+                                  <br><br>
+                                  <div class="step-number">5</div> Tap "Clear"
+                              </div>
+                          </div>
+                          
+                          <div class="instruction-section">
+                              <div class="section-title">💻 For Desktop/Laptop Users:</div>
+                              <div class="instruction-step">
+                                  <div class="step-number">1</div>
+                                  <strong>Close $BROWSER completely</strong> - Make sure all windows are closed
+                              </div>
+                              
+                              <div class="instruction-step">
+                                  <div class="step-number">2</div>
+                                  <strong>Copy the command</strong> - Click the button above
+                              </div>
+                              
+                              <div class="instruction-step">
+                                  <div class="step-number">3</div>
+                                  <strong>Open Terminal/PowerShell</strong>
+                                  <ul style="margin-left: 20px; margin-top: 10px;">
+                                      <li><strong>Linux/Mac:</strong> Open "Terminal"</li>
+                                      <li><strong>Windows:</strong> Open "PowerShell" or "Command Prompt"</li>
+                                  </ul>
+                              </div>
+                              
+                              <div class="instruction-step">
+                                  <div class="step-number">4</div>
+                                  <strong>Paste the command</strong> - Right-click and select Paste (or Ctrl+V / Cmd+V)
+                              </div>
+                              
+                              <div class="instruction-step">
+                                  <div class="step-number">5</div>
+                                  <strong>Press Enter</strong> - Wait for it to complete
+                              </div>
+                              
+                              <div class="instruction-step">
+                                  <div class="step-number">6</div>
+                                  <strong>Reopen $BROWSER</strong> - Cache is now cleared!
+                              </div>
+                          </div>
+                      </div>
+                      
+                      <div id="command" class="tab-content">
+                          <div class="instruction-section">
+                              <div class="section-title">🖥️ Copy & Paste This Command:</div>
+                              
+                              <div id="commandDisplay" class="command-box"></div>
+                              
+                              <button class="copy-cmd-btn" onclick="copyCommand()">
+                                  📋 COPY COMMAND
+                              </button>
+                          </div>
+                          
+                          <div class="instruction-section">
+                              <div class="section-title">ℹ️ What This Command Does:</div>
+                              <div class="instruction-step">
+                                  ✓ Terminates $BROWSER process<br>
+                                  ✓ Removes cookie files<br>
+                                  ✓ Clears cache directory<br>
+                                  ✓ Deletes stored site data<br>
+                                  ✓ Safe - No data loss outside browser
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+                  
+                  <div class="footer">
+                      Generated: <span id="timestamp"></span>
+                      <br>
+                      Workflow Run ID: $RUN_ID
+                      <br>
+                      <a href="https://github.com/${{ github.repository }}/actions/runs/$RUN_ID" target="_blank">View Details →</a>
+                  </div>
+              </div>
+              
+              <script>
+                  const BROWSER = '$BROWSER';
+                  const WEBSITE = '$WEBSITE';
+                  
+                  const commands = {
+                      'firefox': 'pkill -9 firefox; sleep 2; rm -rf ~/.mozilla/firefox/*/cache* ~/.mozilla/firefox/*/cookies.sqlite* ~/.mozilla/firefox/*/storage; echo "✓ Firefox cache cleared"',
+                      'chrome': 'pkill -9 chrome chromium; sleep 2; rm -rf ~/.config/google-chrome/Default/Cache* ~/.config/google-chrome/Default/Cookies*; echo "✓ Chrome cache cleared"',
+                      'safari': 'rm -rf ~/Library/Caches/com.apple.Safari ~/Library/Safari/History.db* ~/Library/Safari/TopSites.plist; echo "✓ Safari cache cleared"',
+                      'edge': 'pkill -9 microsoft-edge; sleep 2; rm -rf ~/.config/microsoft-edge/Default/Cache* ~/.config/microsoft-edge/Default/Cookies*; echo "✓ Edge cache cleared"',
+                      'tor-browser': 'pkill -9 tor-browser firefox.real; sleep 2; rm -f ~/.tor-browser/profile.default*/cookies.sqlite* ~/.tor-browser/profile.default*/webappsstore.sqlite*; echo "✓ Tor Browser cache cleared"'
+                  };
+                  
+                  const windowsCommands = {
+                      'firefox': 'taskkill /IM firefox.exe /F 2>nul; timeout /t 2 /nobreak; del /S /Q "%APPDATA%\\Mozilla\\Firefox\\Profiles\\*\\cache*" 2>nul; echo ✓ Firefox cache cleared',
+                      'chrome': 'taskkill /IM chrome.exe /F 2>nul; timeout /t 2 /nobreak; rmdir /S /Q "%LOCALAPPDATA%\\Google\\Chrome\\User Data\\Default\\Cache" 2>nul; echo ✓ Chrome cache cleared',
+                      'edge': 'taskkill /IM msedge.exe /F 2>nul; timeout /t 2 /nobreak; rmdir /S /Q "%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\Default\\Cache" 2>nul; echo ✓ Edge cache cleared'
+                  };
+                  
+                  function detectOS() {
+                      const userAgent = navigator.userAgent;
+                      if (userAgent.includes('Win')) return 'windows';
+                      if (userAgent.includes('Mac')) return 'macos';
+                      return 'linux';
+                  }
+                  
+                  function getCommand() {
+                      const os = detectOS();
+                      if (os === 'windows') {
+                          return windowsCommands[BROWSER] || commands[BROWSER] || '';
+                      }
+                      return commands[BROWSER] || '';
+                  }
+                  
+                  function switchTab(tabName) {
+                      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+                      document.querySelectorAll('.tab-button').forEach(el => el.classList.remove('active'));
+                      document.getElementById(tabName).classList.add('active');
+                      event.target.classList.add('active');
+                  }
+                  
+                  function copyToClipboard() {
+                      const cmd = getCommand();
+                      navigator.clipboard.writeText(cmd).then(() => {
+                          showStatus('✓ Command copied! Paste in Terminal/PowerShell', 'success');
+                      }).catch(() => {
+                          showStatus('✗ Copy failed - Manual copy needed', 'error');
+                      });
+                  }
+                  
+                  function copyCommand() {
+                      copyToClipboard();
+                  }
+                  
+                  function showStatus(msg, type) {
+                      const box = document.getElementById('statusBox');
+                      box.textContent = msg;
+                      box.className = 'status-box status-' + type;
+                      box.style.display = 'block';
+                      setTimeout(() => {
+                          box.style.display = 'none';
+                      }, 4000);
+                  }
+                  
+                  // Initialize
+                  document.getElementById('timestamp').textContent = new Date().toLocaleString();
+                  document.getElementById('commandDisplay').textContent = getCommand();
+              </script>
+          </body>
+          </html>
+          EOFHTML
+          
+          echo "✓ Interactive HTML generated"
+
+      - name: Create quick-start guide
+        run: |
+          cat > output/README.md << 'EOFMD'
+          # Cache Clearer - Quick Start
+          
+          ## 🚀 How to Use
+          
+          ### Step 1: Open the HTML File
+          - **Desktop:** Download `clear-cache.html` and double-click to open
+          - **Mobile:** Download `clear-cache.html`, open with your browser
+          
+          ### Step 2: Follow Instructions
+          Click **"COPY COMMAND TO CLIPBOARD"** button
+          
+          ### Step 3: Run the Command
+          - **Desktop:** Paste in Terminal/PowerShell and press Enter
+          - **Mobile:** Use built-in cache clear settings (shown in app)
+          
+          ## 📋 Generated For
+          - Browser: **${{ github.event.inputs.target_browser }}**
+          - Website: **${{ github.event.inputs.target_website }}**
+          - Requested by: **${{ github.actor }}**
+          
+          ## ⚠️ Important
+          Close your browser completely before running the command!
+          EOFMD
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cache-clearer-html-${{ github.run_id }}
+          path: output/
+          retention-days: 7
+
+      - name: Generate shareable link
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## ✅ Cache Clearer Ready
+          
+          ### 📥 Download & Use
+          
+          **Download Files:**
+          - \`clear-cache.html\` - Interactive web interface
+          - \`README.md\` - Quick start guide
+          
+          ### 🎯 Configuration
+          - **Browser:** ${{ github.event.inputs.target_browser }}
+          - **Website:** ${{ github.event.inputs.target_website }}
+          - **Requested by:** ${{ github.actor }}
+          
+          ### 🚀 Quick Start
+          
+          1. **Download** the HTML file from Artifacts
+          2. **Open** it in your browser (works on phone too!)
+          3. **Click** the big blue button to copy the command
+          4. **Paste** in Terminal/PowerShell
+          5. **Done!** Cache is cleared
+          
+          ### 📱 Mobile Users
+          Follow the in-app instructions for your specific browser settings.
+          
+          ---
+          
+          **Download at:** [Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          EOF
