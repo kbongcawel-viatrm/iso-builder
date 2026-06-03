@@ -12,30 +12,34 @@ on:
         required: true
         type: string
       output_format:
-        description: 'Output format: script (bash script), link (clickable links), or both'
+        description: 'Output format: script (bash/powershell/js), link (clickable links), or both'
         required: false
         type: string
         default: 'script'
     outputs:
-      script_path:
-        description: 'Path to the generated cache-clearing script'
-        value: ${{ jobs.generate-cache-clearing.outputs.script_path }}
-      script_content:
-        description: 'Content of the generated cache-clearing script'
-        value: ${{ jobs.generate-cache-clearing.outputs.script_content }}
+      bash_script_path:
+        description: 'Path to the generated Bash script'
+        value: ${{ jobs.generate-cache-clearing.outputs.bash_script_path }}
+      powershell_script_path:
+        description: 'Path to the generated PowerShell script'
+        value: ${{ jobs.generate-cache-clearing.outputs.powershell_script_path }}
+      javascript_code:
+        description: 'JavaScript code for platform-agnostic execution'
+        value: ${{ jobs.generate-cache-clearing.outputs.javascript_code }}
       cache_paths:
         description: 'JSON array of cache paths for the target browser'
         value: ${{ jobs.generate-cache-clearing.outputs.cache_paths }}
 
 jobs:
   generate-cache-clearing:
-    name: Generate Cache Clearing Artifacts
+    name: Generate Multi-Platform Cache Clearing Artifacts
     runs-on: ubuntu-latest
     
     outputs:
-      script_path: ${{ steps.generate-script.outputs.script_path }}
-      script_content: ${{ steps.generate-script.outputs.script_content }}
-      cache_paths: ${{ steps.generate-script.outputs.cache_paths }}
+      bash_script_path: ${{ steps.generate-scripts.outputs.bash_script_path }}
+      powershell_script_path: ${{ steps.generate-scripts.outputs.powershell_script_path }}
+      javascript_code: ${{ steps.generate-scripts.outputs.javascript_code }}
+      cache_paths: ${{ steps.generate-scripts.outputs.cache_paths }}
     
     steps:
       - name: Validate inputs
@@ -62,8 +66,8 @@ jobs:
               ;;
           esac
 
-      - name: Generate browser-specific cache clearing script
-        id: generate-script
+      - name: Generate multi-platform cache clearing scripts
+        id: generate-scripts
         run: |
           set -euo pipefail
           
@@ -72,145 +76,330 @@ jobs:
           SCRIPT_DIR="cache-clearing-scripts"
           mkdir -p "$SCRIPT_DIR"
           
-          SCRIPT_FILE="$SCRIPT_DIR/clear-${BROWSER}-cache.sh"
+          # ============= BASH SCRIPT =============
+          BASH_FILE="$SCRIPT_DIR/clear-${BROWSER}-cache.sh"
           
-          echo "Generating cache-clearing script for $BROWSER..."
-          echo '#!/bin/bash' > "$SCRIPT_FILE"
-          echo '# Auto-generated cache clearing script' >> "$SCRIPT_FILE"
-          echo "# Browser: $BROWSER" >> "$SCRIPT_FILE"
-          echo "# Website: $WEBSITE" >> "$SCRIPT_FILE"
-          echo "# Generated: $(date -u)" >> "$SCRIPT_FILE"
-          echo '' >> "$SCRIPT_FILE"
-          echo 'set -euo pipefail' >> "$SCRIPT_FILE"
-          echo '' >> "$SCRIPT_FILE"
+          echo "Generating Bash script for $BROWSER..."
+          echo '#!/bin/bash' > "$BASH_FILE"
+          echo '# Auto-generated cache clearing script' >> "$BASH_FILE"
+          echo "# Browser: $BROWSER" >> "$BASH_FILE"
+          echo "# Website: $WEBSITE" >> "$BASH_FILE"
+          echo "# Generated: $(date -u)" >> "$BASH_FILE"
+          echo '' >> "$BASH_FILE"
+          echo 'set -euo pipefail' >> "$BASH_FILE"
+          echo '' >> "$BASH_FILE"
           
-          # Browser-specific logic
           case "$BROWSER" in
             tor-browser)
-              echo "# Tor Browser on Tails" >> "$SCRIPT_FILE"
-              echo "PROFILE_DIRS=(" >> "$SCRIPT_FILE"
-              echo '  "$HOME/.tor-browser/profile.default"' >> "$SCRIPT_FILE"
-              echo '  "$HOME/.tor-browser/profile.default-esr"' >> "$SCRIPT_FILE"
-              echo '  "$HOME/Browser/TorBrowser/Data/Browser/profile.default"' >> "$SCRIPT_FILE"
-              echo '  "/home/amnesia/.tor-browser/profile.default"' >> "$SCRIPT_FILE"
-              echo '  "/home/amnesia/.tor-browser/profile.default-esr"' >> "$SCRIPT_FILE"
-              echo ")" >> "$SCRIPT_FILE"
-              echo '' >> "$SCRIPT_FILE"
-              echo "for PROFILE_DIR in \"\${PROFILE_DIRS[@]}\"; do" >> "$SCRIPT_FILE"
-              echo '  if [ -d "$PROFILE_DIR" ]; then' >> "$SCRIPT_FILE"
-              echo '    echo "Found Tor Browser profile: $PROFILE_DIR"' >> "$SCRIPT_FILE"
-              echo '    rm -f "$PROFILE_DIR/cookies.sqlite"*' >> "$SCRIPT_FILE"
-              echo '    rm -f "$PROFILE_DIR/webappsstore.sqlite"*' >> "$SCRIPT_FILE"
-              echo '    rm -f "$PROFILE_DIR/permissions.sqlite"*' >> "$SCRIPT_FILE"
-              if [ "$WEBSITE" != "all" ]; then
-                echo '    echo "Clearing cache for '"$WEBSITE"'"' >> "$SCRIPT_FILE"
-              fi
-              echo '    echo "✓ Cache cleared"' >> "$SCRIPT_FILE"
-              echo '    break' >> "$SCRIPT_FILE"
-              echo '  fi' >> "$SCRIPT_FILE"
-              echo 'done' >> "$SCRIPT_FILE"
-              
-              CACHE_PATHS='["~/.tor-browser/profile.default", "~/.tor-browser/profile.default-esr", "/home/amnesia/.tor-browser/profile.default"]'
+              cat >> "$BASH_FILE" << 'EOF'
+          # Tor Browser on Tails/Linux
+          PROFILE_DIRS=(
+            "$HOME/.tor-browser/profile.default"
+            "$HOME/.tor-browser/profile.default-esr"
+            "$HOME/Browser/TorBrowser/Data/Browser/profile.default"
+            "/home/amnesia/.tor-browser/profile.default"
+            "/home/amnesia/.tor-browser/profile.default-esr"
+          )
+          
+          for PROFILE_DIR in "${PROFILE_DIRS[@]}"; do
+            if [ -d "$PROFILE_DIR" ]; then
+              echo "Found Tor Browser profile: $PROFILE_DIR"
+              rm -f "$PROFILE_DIR/cookies.sqlite"*
+              rm -f "$PROFILE_DIR/webappsstore.sqlite"*
+              rm -f "$PROFILE_DIR/permissions.sqlite"*
+              echo "✓ Cache cleared"
+              break
+            fi
+          done
+          EOF
+              CACHE_PATHS='["~/.tor-browser/profile.default", "~/.tor-browser/profile.default-esr"]'
               ;;
-              
             firefox)
-              echo "# Firefox Browser" >> "$SCRIPT_FILE"
-              echo 'FIREFOX_PROFILES="$HOME/.mozilla/firefox"' >> "$SCRIPT_FILE"
-              echo '' >> "$SCRIPT_FILE"
-              echo 'if [ -d "$FIREFOX_PROFILES" ]; then' >> "$SCRIPT_FILE"
-              echo '  echo "Clearing Firefox cache and cookies..."' >> "$SCRIPT_FILE"
-              echo '  rm -rf "$FIREFOX_PROFILES"/*/cache*' >> "$SCRIPT_FILE"
-              echo '  rm -rf "$FIREFOX_PROFILES"/*/cookies.sqlite*' >> "$SCRIPT_FILE"
-              echo '  rm -rf "$FIREFOX_PROFILES"/*/storage' >> "$SCRIPT_FILE"
-              echo '  rm -rf "$FIREFOX_PROFILES"/*/indexedDB' >> "$SCRIPT_FILE"
-              if [ "$WEBSITE" != "all" ]; then
-                echo '  echo "Cleared cache for '"$WEBSITE"'"' >> "$SCRIPT_FILE"
-              fi
-              echo '  echo "✓ Firefox cache cleared"' >> "$SCRIPT_FILE"
-              echo 'else' >> "$SCRIPT_FILE"
-              echo '  echo "Firefox profile directory not found"' >> "$SCRIPT_FILE"
-              echo '  exit 1' >> "$SCRIPT_FILE"
-              echo 'fi' >> "$SCRIPT_FILE"
-              
-              CACHE_PATHS='["~/.mozilla/firefox/*/cache*", "~/.mozilla/firefox/*/cookies.sqlite*"]'
+              cat >> "$BASH_FILE" << 'EOF'
+          # Firefox Browser
+          FIREFOX_PROFILES="$HOME/.mozilla/firefox"
+          
+          if [ -d "$FIREFOX_PROFILES" ]; then
+            echo "Clearing Firefox cache and cookies..."
+            rm -rf "$FIREFOX_PROFILES"/*/cache*
+            rm -rf "$FIREFOX_PROFILES"/*/cookies.sqlite*
+            rm -rf "$FIREFOX_PROFILES"/*/storage
+            rm -rf "$FIREFOX_PROFILES"/*/indexedDB
+            echo "✓ Firefox cache cleared"
+          else
+            echo "Firefox profile directory not found"
+            exit 1
+          fi
+          EOF
+              CACHE_PATHS='["~/.mozilla/firefox/*/cache*"]'
               ;;
-              
             chrome)
-              echo "# Google Chrome Browser" >> "$SCRIPT_FILE"
-              echo 'CHROME_CACHE="$HOME/.config/google-chrome/Default"' >> "$SCRIPT_FILE"
-              echo '' >> "$SCRIPT_FILE"
-              echo 'if [ -d "$CHROME_CACHE" ]; then' >> "$SCRIPT_FILE"
-              echo '  echo "Clearing Google Chrome cache and cookies..."' >> "$SCRIPT_FILE"
-              echo '  rm -rf "$CHROME_CACHE/Cache"*' >> "$SCRIPT_FILE"
-              echo '  rm -rf "$CHROME_CACHE/Code Cache"' >> "$SCRIPT_FILE"
-              echo '  rm -rf "$CHROME_CACHE/Application Cache"' >> "$SCRIPT_FILE"
-              echo '  rm -f "$CHROME_CACHE/Cookies"*' >> "$SCRIPT_FILE"
-              if [ "$WEBSITE" != "all" ]; then
-                echo '  echo "Cleared cache for '"$WEBSITE"'"' >> "$SCRIPT_FILE"
-              fi
-              echo '  echo "✓ Chrome cache cleared"' >> "$SCRIPT_FILE"
-              echo 'else' >> "$SCRIPT_FILE"
-              echo '  echo "Chrome cache directory not found"' >> "$SCRIPT_FILE"
-              echo '  exit 1' >> "$SCRIPT_FILE"
-              echo 'fi' >> "$SCRIPT_FILE"
-              
-              CACHE_PATHS='["~/.config/google-chrome/Default/Cache*", "~/.config/google-chrome/Default/Code Cache"]'
+              cat >> "$BASH_FILE" << 'EOF'
+          # Google Chrome Browser
+          CHROME_CACHE="$HOME/.config/google-chrome/Default"
+          
+          if [ -d "$CHROME_CACHE" ]; then
+            echo "Clearing Google Chrome cache and cookies..."
+            rm -rf "$CHROME_CACHE/Cache"*
+            rm -rf "$CHROME_CACHE/Code Cache"
+            rm -rf "$CHROME_CACHE/Application Cache"
+            rm -f "$CHROME_CACHE/Cookies"*
+            echo "✓ Chrome cache cleared"
+          else
+            echo "Chrome cache directory not found"
+            exit 1
+          fi
+          EOF
+              CACHE_PATHS='["~/.config/google-chrome/Default/Cache*"]'
               ;;
-              
             safari)
-              echo "# Safari Browser (macOS)" >> "$SCRIPT_FILE"
-              echo 'if [[ "$OSTYPE" != "darwin"* ]]; then' >> "$SCRIPT_FILE"
-              echo '  echo "Safari is only available on macOS"' >> "$SCRIPT_FILE"
-              echo '  exit 1' >> "$SCRIPT_FILE"
-              echo 'fi' >> "$SCRIPT_FILE"
-              echo '' >> "$SCRIPT_FILE"
-              echo 'echo "Clearing Safari cache and cookies..."' >> "$SCRIPT_FILE"
-              echo 'rm -rf ~/Library/Caches/com.apple.Safari' >> "$SCRIPT_FILE"
-              echo 'rm -rf ~/Library/Safari/History.db*' >> "$SCRIPT_FILE"
-              echo 'rm -rf ~/Library/Safari/TopSites.plist' >> "$SCRIPT_FILE"
-              if [ "$WEBSITE" != "all" ]; then
-                echo 'echo "Cleared cache for '"$WEBSITE"'"' >> "$SCRIPT_FILE"
-              fi
-              echo 'echo "✓ Safari cache cleared"' >> "$SCRIPT_FILE"
-              
-              CACHE_PATHS='["~/Library/Caches/com.apple.Safari", "~/Library/Safari/History.db*"]'
+              cat >> "$BASH_FILE" << 'EOF'
+          # Safari Browser (macOS)
+          if [[ "$OSTYPE" != "darwin"* ]]; then
+            echo "Safari is only available on macOS"
+            exit 1
+          fi
+          
+          echo "Clearing Safari cache and cookies..."
+          rm -rf ~/Library/Caches/com.apple.Safari
+          rm -rf ~/Library/Safari/History.db*
+          rm -rf ~/Library/Safari/TopSites.plist
+          echo "✓ Safari cache cleared"
+          EOF
+              CACHE_PATHS='["~/Library/Caches/com.apple.Safari"]'
               ;;
-              
             edge)
-              echo "# Microsoft Edge Browser" >> "$SCRIPT_FILE"
-              echo 'EDGE_CACHE="$HOME/.config/microsoft-edge/Default"' >> "$SCRIPT_FILE"
-              echo '' >> "$SCRIPT_FILE"
-              echo 'if [ -d "$EDGE_CACHE" ]; then' >> "$SCRIPT_FILE"
-              echo '  echo "Clearing Microsoft Edge cache and cookies..."' >> "$SCRIPT_FILE"
-              echo '  rm -rf "$EDGE_CACHE/Cache"*' >> "$SCRIPT_FILE"
-              echo '  rm -rf "$EDGE_CACHE/Code Cache"' >> "$SCRIPT_FILE"
-              echo '  rm -f "$EDGE_CACHE/Cookies"*' >> "$SCRIPT_FILE"
-              if [ "$WEBSITE" != "all" ]; then
-                echo '  echo "Cleared cache for '"$WEBSITE"'"' >> "$SCRIPT_FILE"
-              fi
-              echo '  echo "✓ Edge cache cleared"' >> "$SCRIPT_FILE"
-              echo 'else' >> "$SCRIPT_FILE"
-              echo '  echo "Edge cache directory not found"' >> "$SCRIPT_FILE"
-              echo '  exit 1' >> "$SCRIPT_FILE"
-              echo 'fi' >> "$SCRIPT_FILE"
-              
+              cat >> "$BASH_FILE" << 'EOF'
+          # Microsoft Edge Browser
+          EDGE_CACHE="$HOME/.config/microsoft-edge/Default"
+          
+          if [ -d "$EDGE_CACHE" ]; then
+            echo "Clearing Microsoft Edge cache and cookies..."
+            rm -rf "$EDGE_CACHE/Cache"*
+            rm -rf "$EDGE_CACHE/Code Cache"
+            rm -f "$EDGE_CACHE/Cookies"*
+            echo "✓ Edge cache cleared"
+          else
+            echo "Edge cache directory not found"
+            exit 1
+          fi
+          EOF
               CACHE_PATHS='["~/.config/microsoft-edge/Default/Cache*"]'
               ;;
           esac
           
-          chmod +x "$SCRIPT_FILE"
+          chmod +x "$BASH_FILE"
+          echo "✓ Bash script generated: $BASH_FILE"
           
-          echo "✓ Script generated: $SCRIPT_FILE"
+          # ============= POWERSHELL SCRIPT =============
+          PS_FILE="$SCRIPT_DIR/clear-${BROWSER}-cache.ps1"
           
-          # Output variables
-          SCRIPT_CONTENT=$(cat "$SCRIPT_FILE")
-          echo "script_path=$SCRIPT_FILE" >> "$GITHUB_OUTPUT"
-          echo "script_content<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$SCRIPT_CONTENT" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "Generating PowerShell script for $BROWSER..."
+          cat > "$PS_FILE" << 'EOF'
+          # Auto-generated cache clearing script for Windows
+          # Browser: $BROWSER
+          # Website: $WEBSITE
+          # Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+          
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = "Stop"
+          EOF
+          
+          case "$BROWSER" in
+            tor-browser)
+              cat >> "$PS_FILE" << 'EOF'
+          
+          # Tor Browser Profile Detection
+          $profileDirs = @(
+            "$env:APPDATA\Tor Browser\profile.default",
+            "$env:APPDATA\Tor Browser\profile.default-esr",
+            "$env:LOCALAPPDATA\Tor Browser\profile.default"
+          )
+          
+          foreach ($profileDir in $profileDirs) {
+            if (Test-Path $profileDir) {
+              Write-Host "Found Tor Browser profile: $profileDir"
+              Remove-Item -Path "$profileDir\cookies.sqlite*" -Force -ErrorAction SilentlyContinue
+              Remove-Item -Path "$profileDir\webappsstore.sqlite*" -Force -ErrorAction SilentlyContinue
+              Remove-Item -Path "$profileDir\permissions.sqlite*" -Force -ErrorAction SilentlyContinue
+              Write-Host "✓ Cache cleared"
+              break
+            }
+          }
+          EOF
+              ;;
+            firefox)
+              cat >> "$PS_FILE" << 'EOF'
+          
+          $firefoxProfile = "$env:APPDATA\Mozilla\Firefox"
+          
+          if (Test-Path $firefoxProfile) {
+            Write-Host "Clearing Firefox cache and cookies..."
+            Get-ChildItem -Path $firefoxProfile -Filter "cache*" -Recurse | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+            Get-ChildItem -Path $firefoxProfile -Filter "cookies.sqlite*" -Recurse | Remove-Item -Force -ErrorAction SilentlyContinue
+            Write-Host "✓ Firefox cache cleared"
+          } else {
+            Write-Host "Firefox profile directory not found"
+            exit 1
+          }
+          EOF
+              ;;
+            chrome)
+              cat >> "$PS_FILE" << 'EOF'
+          
+          $chromePath = "$env:LOCALAPPDATA\Google\Chrome\User Data\Default"
+          
+          if (Test-Path $chromePath) {
+            Write-Host "Clearing Google Chrome cache and cookies..."
+            Remove-Item -Path "$chromePath\Cache" -Recurse -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path "$chromePath\Code Cache" -Recurse -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path "$chromePath\Cookies*" -Force -ErrorAction SilentlyContinue
+            Write-Host "✓ Chrome cache cleared"
+          } else {
+            Write-Host "Chrome cache directory not found"
+            exit 1
+          }
+          EOF
+              ;;
+            edge)
+              cat >> "$PS_FILE" << 'EOF'
+          
+          $edgePath = "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default"
+          
+          if (Test-Path $edgePath) {
+            Write-Host "Clearing Microsoft Edge cache and cookies..."
+            Remove-Item -Path "$edgePath\Cache" -Recurse -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path "$edgePath\Code Cache" -Recurse -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path "$edgePath\Cookies*" -Force -ErrorAction SilentlyContinue
+            Write-Host "✓ Edge cache cleared"
+          } else {
+            Write-Host "Edge cache directory not found"
+            exit 1
+          }
+          EOF
+              ;;
+          esac
+          
+          echo "✓ PowerShell script generated: $PS_FILE"
+          
+          # ============= JAVASCRIPT CODE (Node.js) =============
+          JS_FILE="$SCRIPT_DIR/clear-${BROWSER}-cache.js"
+          
+          echo "Generating JavaScript code for $BROWSER..."
+          cat > "$JS_FILE" << 'EOF'
+          // Auto-generated cache clearing script (Node.js)
+          // Browser: $BROWSER
+          // Website: $WEBSITE
+          // Generated: new Date().toISOString()
+          // Usage: node clear-cache.js
+          
+          const fs = require('fs');
+          const path = require('path');
+          const os = require('os');
+          
+          const browser = process.env.BROWSER || '$BROWSER';
+          const homeDir = os.homedir();
+          
+          function deleteRecursive(dirPath) {
+            if (fs.existsSync(dirPath)) {
+              fs.readdirSync(dirPath).forEach(file => {
+                const curPath = path.join(dirPath, file);
+                if (fs.lstatSync(curPath).isDirectory()) {
+                  deleteRecursive(curPath);
+                } else {
+                  fs.unlinkSync(curPath);
+                }
+              });
+              fs.rmdirSync(dirPath);
+            }
+          }
+          
+          async function clearCache() {
+            console.log(`Clearing cache for: ${browser}`);
+            
+            try {
+              switch(browser) {
+                case 'firefox':
+                  const firefoxPath = path.join(homeDir, '.mozilla', 'firefox');
+                  if (fs.existsSync(firefoxPath)) {
+                    fs.readdirSync(firefoxPath).forEach(profile => {
+                      const cachePath = path.join(firefoxPath, profile, 'cache2');
+                      if (fs.existsSync(cachePath)) deleteRecursive(cachePath);
+                      
+                      const cookiePath = path.join(firefoxPath, profile, 'cookies.sqlite');
+                      if (fs.existsSync(cookiePath)) fs.unlinkSync(cookiePath);
+                    });
+                    console.log('✓ Firefox cache cleared');
+                  }
+                  break;
+                  
+                case 'chrome':
+                  const chromePath = process.platform === 'darwin'
+                    ? path.join(homeDir, 'Library', 'Application Support', 'Google', 'Chrome')
+                    : (process.platform === 'win32'
+                      ? path.join(process.env.LOCALAPPDATA, 'Google', 'Chrome', 'User Data')
+                      : path.join(homeDir, '.config', 'google-chrome'));
+                  
+                  if (fs.existsSync(chromePath)) {
+                    const cachePath = path.join(chromePath, 'Default', 'Cache');
+                    if (fs.existsSync(cachePath)) deleteRecursive(cachePath);
+                    console.log('✓ Chrome cache cleared');
+                  }
+                  break;
+                  
+                case 'safari':
+                  if (process.platform === 'darwin') {
+                    const safariCache = path.join(homeDir, 'Library', 'Caches', 'com.apple.Safari');
+                    if (fs.existsSync(safariCache)) deleteRecursive(safariCache);
+                    console.log('✓ Safari cache cleared');
+                  } else {
+                    console.error('Safari is only available on macOS');
+                    process.exit(1);
+                  }
+                  break;
+                  
+                case 'edge':
+                  const edgePath = process.platform === 'win32'
+                    ? path.join(process.env.LOCALAPPDATA, 'Microsoft', 'Edge', 'User Data')
+                    : path.join(homeDir, '.config', 'microsoft-edge');
+                  
+                  if (fs.existsSync(edgePath)) {
+                    const cachePath = path.join(edgePath, 'Default', 'Cache');
+                    if (fs.existsSync(cachePath)) deleteRecursive(cachePath);
+                    console.log('✓ Edge cache cleared');
+                  }
+                  break;
+                  
+                default:
+                  console.error(`Browser not supported: ${browser}`);
+                  process.exit(1);
+              }
+            } catch (error) {
+              console.error('Error clearing cache:', error);
+              process.exit(1);
+            }
+          }
+          
+          clearCache();
+          EOF
+          
+          echo "✓ JavaScript code generated: $JS_FILE"
+          
+          # Store outputs
+          BASH_CONTENT=$(cat "$BASH_FILE")
+          PS_CONTENT=$(cat "$PS_FILE")
+          JS_CONTENT=$(cat "$JS_FILE")
+          
+          echo "bash_script_path=$BASH_FILE" >> "$GITHUB_OUTPUT"
+          echo "powershell_script_path=$PS_FILE" >> "$GITHUB_OUTPUT"
           echo "cache_paths=$CACHE_PATHS" >> "$GITHUB_OUTPUT"
+          
+          # Store JavaScript content with EOF handling
+          echo "javascript_code<<JSCODE" >> "$GITHUB_OUTPUT"
+          cat "$JS_FILE" >> "$GITHUB_OUTPUT"
+          echo "JSCODE" >> "$GITHUB_OUTPUT"
 
-      - name: Upload cache clearing script artifact
+      - name: Upload multi-platform cache clearing scripts
         uses: actions/upload-artifact@v4
         with:
           name: cache-clearing-scripts
@@ -220,13 +409,16 @@ jobs:
       - name: Generate summary
         run: |
           cat >> $GITHUB_STEP_SUMMARY << EOF
-          ## Cache Clearing Artifacts Generated
+          ## Multi-Platform Cache Clearing Artifacts Generated
           
           - **Browser**: ${{ inputs.target_browser }}
           - **Website**: ${{ inputs.target_website }}
           - **Output Format**: ${{ inputs.output_format }}
           
           ### Generated Artifacts
-          - Script: \`${{ steps.generate-script.outputs.script_path }}\`
-          - Available for download in workflow artifacts
+          - Bash Script: \`.github/workflows/cache-clearing-scripts/clear-${{ inputs.target_browser }}-cache.sh\`
+          - PowerShell Script: \`.github/workflows/cache-clearing-scripts/clear-${{ inputs.target_browser }}-cache.ps1\`
+          - JavaScript (Node.js): \`.github/workflows/cache-clearing-scripts/clear-${{ inputs.target_browser }}-cache.js\`
+          
+          **All scripts are available for download in the Artifacts section**
           EOF
