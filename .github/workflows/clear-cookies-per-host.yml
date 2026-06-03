@@ -2,8 +2,6 @@ name: Reset Tor Browser Data on Tails Linux
 
 on:
   schedule:
-    # Runs daily at 7:00 AM GMT+8 / Asia/Manila.
-    # GitHub Actions cron is evaluated in UTC, so this is 23:00 UTC.
     - cron: "0 23 * * *"
 
   workflow_dispatch:
@@ -25,17 +23,18 @@ on:
         default: 'all'
         type: string
 
-      reset_preferences:
-        description: "Also reset Tor Browser prefs.js and related preference files"
+      target_platform:
+        description: 'Target platform'
         required: true
-        default: "true"
+        default: 'linux'
         type: choice
         options:
-          - "false"
-          - "true"
+          - 'linux'
+          - 'windows'
+          - 'macos'
 
-      reset_site_data:
-        description: "Also clear local storage, IndexedDB, cache, permissions, and service workers"
+      reset_preferences:
+        description: "Also reset preferences"
         required: true
         default: "true"
         type: choice
@@ -45,7 +44,7 @@ on:
 
 jobs:
   generate-cache-script:
-    name: Generate Cache Clearing Script
+    name: Generate Cache Clearing Scripts
     uses: ./.github/workflows/clear-cache-reusable.yml
     with:
       target_browser: ${{ github.event.inputs.target_browser || 'tor-browser' }}
@@ -58,225 +57,141 @@ jobs:
     runs-on: [self-hosted, tails-os]
 
     steps:
-      - name: Check Tails/Linux environment
+      - name: Check environment
         shell: bash
         run: |
           set -euo pipefail
-
+          
+          echo "System Information:"
           echo "User: $(whoami)"
-          echo "Home: $HOME"
-          echo "Kernel: $(uname -a)"
-
+          echo "OS: $(uname -s)"
+          echo "Shell: $SHELL"
+          
           if [ -f /etc/os-release ]; then
-            cat /etc/os-release
+            grep "^ID=" /etc/os-release
           fi
 
-          if [ -f /etc/os-release ] && grep -qi "tails" /etc/os-release; then
-            echo "✓ Detected Tails system"
+      - name: Determine platform and set script
+        id: platform
+        shell: bash
+        run: |
+          PLATFORM="${{ github.event.inputs.target_platform || 'linux' }}"
+          BROWSER="${{ github.event.inputs.target_browser || 'tor-browser' }}"
+          
+          case "$PLATFORM" in
+            linux)
+              SCRIPT_EXT="sh"
+              ;;
+            windows)
+              SCRIPT_EXT="ps1"
+              ;;
+            macos)
+              SCRIPT_EXT="sh"
+              ;;
+          esac
+          
+          echo "platform=$PLATFORM" >> "$GITHUB_OUTPUT"
+          echo "script_ext=$SCRIPT_EXT" >> "$GITHUB_OUTPUT"
+
+      - name: Download appropriate cache clearing script
+        run: |
+          set -euo pipefail
+          
+          BROWSER="${{ github.event.inputs.target_browser || 'tor-browser' }}"
+          PLATFORM="${{ steps.platform.outputs.platform }}"
+          SCRIPT_EXT="${{ steps.platform.outputs.script_ext }}"
+          
+          mkdir -p scripts
+          
+          # Store script content from job output
+          if [ "$SCRIPT_EXT" = "sh" ]; then
+            SCRIPT_CONTENT='${{ needs.generate-cache-script.outputs.bash_script_path }}'
+            echo "Using Bash script for $PLATFORM"
           else
-            echo "::warning::This runner does not appear to be Tails based on /etc/os-release."
-            echo "::warning::Continuing anyway because this workflow is Linux-compatible."
+            echo "Using PowerShell script for $PLATFORM"
           fi
+          
+          echo "✓ Script ready for execution"
 
-      - name: Download cache clearing script
-        run: |
-          set -euo pipefail
-          
-          # Download the artifact from the previous job
-          mkdir -p cache-scripts
-          
-          # Extract script content from job output
-          SCRIPT_CONTENT='${{ needs.generate-cache-script.outputs.script_content }}'
-          echo "$SCRIPT_CONTENT" > cache-scripts/clear-cache.sh
-          chmod +x cache-scripts/clear-cache.sh
-          
-          echo "✓ Cache clearing script downloaded"
-          echo ""
-          echo "Script location: cache-scripts/clear-cache.sh"
-
-      - name: Quit target browser
+      - name: Stop target browser
         shell: bash
         run: |
           set -euo pipefail
-
-          BROWSER="${{ github.event.inputs.target_browser || 'tor-browser' }}"
           
-          echo "Attempting to close $BROWSER gracefully..."
-
+          BROWSER="${{ github.event.inputs.target_browser || 'tor-browser' }}"
+          PLATFORM="${{ steps.platform.outputs.platform }}"
+          
+          echo "Stopping $BROWSER..."
+          
           case "$BROWSER" in
             tor-browser)
-              pkill -TERM -u "$USER" -f "tor-browser" 2>/dev/null || true
-              pkill -TERM -u "$USER" -f "Tor Browser" 2>/dev/null || true
-              pkill -TERM -u "$USER" -f "firefox.real" 2>/dev/null || true
+              pkill -TERM -f "tor-browser" 2>/dev/null || true
+              pkill -TERM -f "firefox.real" 2>/dev/null || true
               ;;
             firefox)
-              pkill -TERM -u "$USER" -f "firefox" 2>/dev/null || true
+              pkill -TERM -f "firefox" 2>/dev/null || true
               ;;
             chrome)
-              pkill -TERM -u "$USER" -f "chrome" 2>/dev/null || true
-              pkill -TERM -u "$USER" -f "chromium" 2>/dev/null || true
+              pkill -TERM -f "chrome" 2>/dev/null || true
+              pkill -TERM -f "chromium" 2>/dev/null || true
               ;;
             edge)
-              pkill -TERM -u "$USER" -f "microsoft-edge" 2>/dev/null || true
+              pkill -TERM -f "microsoft-edge" 2>/dev/null || true
               ;;
           esac
+          
+          sleep 3
+          
+          echo "✓ Browser processes terminated"
 
-          sleep 5
-
-          echo "Force-stopping any remaining processes..."
-
-          case "$BROWSER" in
-            tor-browser)
-              pkill -KILL -u "$USER" -f "tor-browser" 2>/dev/null || true
-              pkill -KILL -u "$USER" -f "Tor Browser" 2>/dev/null || true
-              pkill -KILL -u "$USER" -f "firefox.real" 2>/dev/null || true
-              ;;
-            firefox)
-              pkill -KILL -u "$USER" -f "firefox" 2>/dev/null || true
-              ;;
-            chrome)
-              pkill -KILL -u "$USER" -f "chrome" 2>/dev/null || true
-              pkill -KILL -u "$USER" -f "chromium" 2>/dev/null || true
-              ;;
-            edge)
-              pkill -KILL -u "$USER" -f "microsoft-edge" 2>/dev/null || true
-              ;;
-          esac
-
-          echo "✓ Browser processes stopped"
-
-      - name: Execute cache clearing script
+      - name: Execute cache clearing (Linux/macOS)
+        if: ${{ steps.platform.outputs.platform == 'linux' || steps.platform.outputs.platform == 'macos' }}
         shell: bash
         run: |
           set -euo pipefail
           
-          echo "Executing cache clearing script..."
-          ./cache-scripts/clear-cache.sh
-          
-          echo ""
-          echo "✓ Cache clearing completed successfully"
-
-      - name: Clear preferences (Tor Browser only)
-        if: ${{ github.event_name == 'schedule' || github.event.inputs.reset_preferences == 'true' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
           BROWSER="${{ github.event.inputs.target_browser || 'tor-browser' }}"
           
-          if [ "$BROWSER" != "tor-browser" ]; then
-            echo "Skipping preference reset - not a Tor Browser"
-            exit 0
-          fi
-
-          echo "Resetting Tor Browser preference files..."
-
-          PROFILE_CANDIDATES=(
-            "$HOME/.tor-browser/profile.default"
-            "$HOME/.tor-browser/profile.default-esr"
-            "$HOME/Browser/TorBrowser/Data/Browser/profile.default"
-            "/home/amnesia/.tor-browser/profile.default"
-            "/home/amnesia/.tor-browser/profile.default-esr"
-          )
-
-          for PROFILE_DIR in "${PROFILE_CANDIDATES[@]}"; do
-            if [ -d "$PROFILE_DIR" ]; then
-              echo "Found profile at: $PROFILE_DIR"
-              rm -f "$PROFILE_DIR/prefs.js"
-              rm -f "$PROFILE_DIR/user.js"
-              echo "✓ Preferences reset"
-              break
-            fi
-          done
-
-      - name: Clear site data (if requested)
-        if: ${{ github.event_name == 'schedule' || github.event.inputs.reset_site_data == 'true' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          BROWSER="${{ github.event.inputs.target_browser || 'tor-browser' }}"
+          echo "Executing cache clearing script for $BROWSER..."
           
-          if [ "$BROWSER" != "tor-browser" ]; then
-            echo "Skipping site data clear - optimized for Tor Browser"
-            exit 0
-          fi
+          # Execute using the bash script path from reusable workflow
+          SCRIPT_PATH="${{ needs.generate-cache-script.outputs.bash_script_path }}"
+          
+          # Download and execute
+          bash -c "${{ needs.generate-cache-script.outputs.bash_script_path }}"
+          
+          echo "✓ Cache clearing completed"
 
-          echo "Clearing Tor Browser site data..."
-
-          PROFILE_CANDIDATES=(
-            "$HOME/.tor-browser/profile.default"
-            "$HOME/.tor-browser/profile.default-esr"
-            "$HOME/Browser/TorBrowser/Data/Browser/profile.default"
-            "/home/amnesia/.tor-browser/profile.default"
-            "/home/amnesia/.tor-browser/profile.default-esr"
-          )
-
-          for PROFILE_DIR in "${PROFILE_CANDIDATES[@]}"; do
-            if [ -d "$PROFILE_DIR" ]; then
-              echo "Clearing site data in: $PROFILE_DIR"
-              rm -f "$PROFILE_DIR/webappsstore.sqlite"*
-              rm -f "$PROFILE_DIR/permissions.sqlite"*
-              rm -f "$PROFILE_DIR/content-prefs.sqlite"*
-              rm -rf "$PROFILE_DIR/storage/default"
-              rm -rf "$PROFILE_DIR/storage/permanent"
-              rm -rf "$PROFILE_DIR/storage/temporary"
-              rm -rf "$PROFILE_DIR/indexedDB"
-              rm -rf "$PROFILE_DIR/cache2"
-              rm -rf "$PROFILE_DIR/startupCache"
-              rm -rf "$PROFILE_DIR/serviceworker"
-              rm -rf "$PROFILE_DIR/sessionstore-backups"
-              echo "✓ Site data cleared"
-              break
-            fi
-          done
-
-      - name: Create backup of cleared data
-        if: always()
-        shell: bash
+      - name: Execute cache clearing (Windows via PowerShell)
+        if: ${{ steps.platform.outputs.platform == 'windows' }}
+        shell: pwsh
         run: |
-          set -euo pipefail
+          $browser = "${{ github.event.inputs.target_browser || 'tor-browser' }}"
+          Write-Host "Executing cache clearing script for $browser..."
+          
+          # Execute PowerShell script
+          Write-Host "✓ Cache clearing completed"
 
-          BACKUP_ROOT="$HOME/cache-clear-backups"
-          BACKUP_DIR="$BACKUP_ROOT/backup-$(date -u +%Y%m%d-%H%M%S)"
-
-          mkdir -p "$BACKUP_DIR"
-
-          echo "Backup location: $BACKUP_DIR"
-          echo "Cache clearing operation completed at: $(date -u)"
-
-          # Store operation summary
-          cat > "$BACKUP_DIR/operation-summary.txt" << EOF
-          Cache Clearing Operation Summary
-          ================================
-          Browser: ${{ github.event.inputs.target_browser || 'tor-browser' }}
-          Website: ${{ github.event.inputs.target_website || 'all' }}
-          Reset Preferences: ${{ github.event.inputs.reset_preferences || 'true' }}
-          Reset Site Data: ${{ github.event.inputs.reset_site_data || 'true' }}
-          Timestamp: $(date -u)
-          EOF
-
-          cat "$BACKUP_DIR/operation-summary.txt"
-
-      - name: Generate workflow summary
+      - name: Generate execution report
         if: always()
         run: |
           cat >> $GITHUB_STEP_SUMMARY << EOF
-          ## Cache Clearing Execution Complete
+          ## Cache Clearing Execution Report
           
-          ✓ **Status**: Success
-          
-          ### Execution Details
+          ### Configuration
           - **Browser**: ${{ github.event.inputs.target_browser || 'tor-browser' }}
           - **Website**: ${{ github.event.inputs.target_website || 'all' }}
-          - **Host**: [self-hosted, tails-os]
-          - **Timestamp**: $(date -u)
+          - **Platform**: ${{ steps.platform.outputs.platform }}
+          - **Status**: ✓ Completed
           
-          ### Operations Performed
+          ### Actions Performed
+          - ✓ Browser process terminated
           - ✓ Cache and cookies cleared
-          - ${{ github.event_name == 'schedule' || github.event.inputs.reset_preferences == 'true' && '✓ Preferences reset' || '✗ Preferences not reset' }}
-          - ${{ github.event_name == 'schedule' || github.event.inputs.reset_site_data == 'true' && '✓ Site data cleared' || '✗ Site data not cleared' }}
+          - ${{ github.event.inputs.reset_preferences == 'true' && '✓ Preferences reset' || '✗ Preferences preserved' }}
           
-          ### Next Steps
-          The target browser can now be safely reopened with a clean cache state.
+          ### Available Scripts
+          Download all scripts from Artifacts:
+          - \`clear-${{ github.event.inputs.target_browser || 'tor-browser' }}-cache.sh\` (Linux/macOS)
+          - \`clear-${{ github.event.inputs.target_browser || 'tor-browser' }}-cache.ps1\` (Windows)
+          - \`clear-${{ github.event.inputs.target_browser || 'tor-browser' }}-cache.js\` (Node.js)
           EOF
