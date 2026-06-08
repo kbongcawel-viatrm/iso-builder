@@ -2,11 +2,29 @@ name: Use verified Qubes ISO
 
 on:
   workflow_dispatch:
+    inputs:
+      skip_download:
+        description: 'Skip download and verification stage (use existing ISO)'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+       skip_install:
+        description: 'Skip install stage'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 permissions: write-all
 
 jobs:
   download-and-verify:
+    if: github.event.inputs.skip_download == 'false'
     runs-on: [self-hosted, tails]
     
     env:
@@ -75,6 +93,7 @@ jobs:
           retention-days: 30
 
   verify-target-and-install:
+    if: github.event.inputs.skip_install == 'false'
     runs-on: [self-hosted, tails]
     needs: download-and-verify
     
@@ -205,3 +224,4 @@ jobs:
           ### Next Steps
           You can now boot from ${{ env.TARGET_DEVICE }} to begin the Qubes OS installation process.
           EOF
+   
