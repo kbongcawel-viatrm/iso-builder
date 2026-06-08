@@ -24,8 +24,9 @@ if [ -z "${1:-}" ]; then
     exit 1
 fi
 
-GRUB_USER="amnesia"
+
 PLAIN_PASSWORD="$1"
+GRUB_USER="$2"
 
 echo "[+] Phase 1: Checking and temporarily remounting boot directories if needed..."
 # Dom0 /boot may occasionally be mounted read-only depending on hardening setups
