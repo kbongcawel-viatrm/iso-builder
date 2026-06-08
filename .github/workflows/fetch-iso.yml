@@ -5,7 +5,7 @@ on:
 
 jobs:
   download-and-verify:
-    runs-on: [ubuntu-latest]
+    runs-on: [self-hosted, tails]
     
     env:
       ISO_NAME: Qubes-R4.3.1-rc1-x86_64.iso
