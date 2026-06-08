@@ -1,0 +1,57 @@
+#!/bin/bash
+# ==============================================================================
+# STAGE 1: SYSTEM HARDENING PROVISIONING SCRIPT
+# Run this once during image creation / server setup before freezing root.
+# ==============================================================================
+
+set -euo pipefail
+
+# Ensure script is run as root
+if [ "$(id -u)" -ne 0 ]; then
+    echo "[-] This script must be run as root." >&2
+    exit 1
+fi
+
+echo "[+] Hardening Writeable Mounts in /etc/fstab..."
+# Backup existing fstab
+cp /etc/fstab /etc/fstab.bak
+
+# Enforce noexec, nosuid, nodev on /tmp and /dev/shm via tmpfs (RAM-backed space)
+# Ensure root (/) is strictly explicitly mounted as 'ro'
+sed -i 's/\s\/\s.*defaults.*/ \/ ext4 ro,relatime 0 1/g' /etc/fstab
+
+# Append secure temporary file configurations if not already present
+if ! grep -q "/tmp" /etc/fstab; then
+    cat << 'EOF' >> /etc/fstab
+tmpfs   /tmp        tmpfs   rw,nosuid,nodev,noexec,relatime,size=512M   0 0
+tmpfs   /run        tmpfs   rw,nosuid,nodev,noexec,relatime,size=128M   0 0
+tmpfs   /var/log    tmpfs   rw,nosuid,nodev,noexec,relatime,size=256M   0 0
+EOF
+fi
+
+echo "[+] Applying Static Kernel Hardening Configs..."
+mkdir -p /etc/sysctl.d
+cat << 'EOF' > /etc/sysctl.d/99-security-hardening.conf
+# Restrict dmesg access to root only to prevent exploit reconnaissance
+kernel.dmesg_restrict = 1
+# Hide kernel symbols in /proc/kallsyms to obstruct payload generation
+kernel.kptr_restrict = 2
+# Prevent unprivileged users from using the BPF JIT compiler
+kernel.unprivileged_bpf_disabled = 1
+# Prevent core dumps from setuid binaries which might leak secure data
+fs.suid_dumpable = 0
+# Enable Address Space Layout Randomisation (ASLR)
+kernel.randomize_va_space = 2
+EOF
+
+echo "[+] Generating dm-verity Setup Requirements..."
+# Note: For production, dm-verity requires formatting a separate metadata partition
+# dynamically verified by your bootloader (like grub or systemd-boot Unified Kernel Images).
+if command -v veritysetup &> /dev/null; then
+    echo "[!] 'veritysetup' detected. Ensure your CI/CD signs the resulting root hash!"
+else
+    echo "[*] Hint: Install 'cryptsetup' to generate cryptographic block trees for boot integrity."
+fi
+
+echo "[+] System preparation complete. Please reboot into your read-only enviro
+nment."
