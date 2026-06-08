@@ -224,4 +224,57 @@ jobs:
           ### Next Steps
           You can now boot from ${{ env.TARGET_DEVICE }} to begin the Qubes OS installation process.
           EOF
-   
+          
+     harden-configuration:
+     runs-on: [self-hosted, qubes]
+    
+     steps:
+      - name: Checkout scripts from main branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Run scripts/sysprep as root
+        run: |
+          set -euo pipefail
+          sudo chmod +x scripts/sysprep
+          sudo bash scripts/sysprep
+          echo "✓ sysprep success"
+          
+      - name: Copy and configure system-freeze.sh
+        run: |
+          set -euo pipefail
+          sudo cp scripts/system-freeze.sh /usr/local/bin/system-freeze.sh
+          sudo chmod +x /usr/local/bin/system-freeze.sh
+          echo "✓ system-freeze.sh installed and made executable"
+
+      - name: Create systemd service file
+        run: |
+          set -euo pipefail
+          sudo mkdir -p /etc/systemd/system
+          sudo tee /etc/systemd/system/system-freeze.service > /dev/null << 'EOF'
+          [Unit]
+          Description=Freeze Kernel and Enforce Read-Only Boundaries
+          DefaultDependencies=no
+          After=local-fs.target
+          Before=sysinit.target systemd-sysctl.service
+          Conflicts=shutdown.target
+
+          [Service]
+          Type=oneshot
+          RemainAfterExit=yes
+          ExecStart=/usr/local/bin/system-freeze.sh
+          StandardOutput=journal+console
+
+          [Install]
+          WantedBy=sysinit.target
+          EOF
+          echo "✓ system-freeze.service created"
+
+      - name: Enable system-freeze service
+        run: |
+          set -euo pipefail
+          sudo systemctl daemon-reload
+          sudo systemctl enable system-freeze.service
+          echo "✓ system-freeze.service enabled"
+
