@@ -3,6 +3,8 @@ name: Use verified Qubes ISO
 on:
   workflow_dispatch:
 
+permissions: write-all
+
 jobs:
   download-and-verify:
     runs-on: [self-hosted, tails]
