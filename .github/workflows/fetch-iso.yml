@@ -74,6 +74,7 @@ jobs:
 
   verify-target-and-install:
     runs-on: [self-hosted, tails]
+    needs: download-and-verify
     
     env:
       ISO_NAME: Qubes-R4.3.1-rc1-x86_64.iso
@@ -81,6 +82,13 @@ jobs:
       TARGET_DEVICE: /dev/sdb
     
     steps:
+      - name: Download ISO artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: iso
+          path: ${{ env.ISO_INSTALL_DIR }}
+          
+          
       - name: Verify target device exists
         run: |
           set -euo pipefail
