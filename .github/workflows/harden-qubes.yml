@@ -17,7 +17,7 @@ jobs:
 
       - name: Run scripts/sysprep as root
         run: |
-          set -euo pipe fail 
+          set -euo pipefail 
           sudo chmod +x scripts/sysprep
           sudo bash scripts/sysprep
           echo "✓ sysprep success"
