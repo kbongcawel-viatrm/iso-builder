@@ -86,7 +86,7 @@ done
 
 echo "[+] Phase 5: Routing output layout targets..."
 # In Qubes R4.2+, the standard configuration maps to /boot/grub2/grub.cfg for unified builds
-GRUB_CFG_PATH="/boot/grub2/grub.cfg"
+GRUB_CFG_PATH="/boot/grub/grub.cfg"
 
 # Support fallback mapping checks for EFI configurations
 if [ -f "/boot/efi/EFI/qubes/grub.cfg" ]; then
@@ -99,7 +99,7 @@ if [ -f "$GRUB_CFG_PATH" ]; then
 fi
 
 echo "[+] Phase 6: Executing grub-mkconfig pipeline..."
-grub-mkconfig -o "$GRUB_CFG_PATH"
+sudo grub-mkconfig -o "$GRUB_CFG_PATH"
 
 echo "[+] Phase 7: Verification scan..."
 # Ensure that your primary Xen or Linux entry points contain the required override flag
