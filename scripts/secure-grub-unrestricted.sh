@@ -38,7 +38,7 @@ fi
 echo "[+] Phase 2: Generating salted PBKDF2 hash using Qubes/Fedora binaries..."
 # Qubes OS uses the 'grub2-' prefixed tools natively
 if command -v grub2-mkpasswd-pbkdf2 &> /dev/null; then
-    GRUB_MKPASSWD_CMD="grub2-mkpasswd-pbkdf2"
+    GRUB_MKPASSWD_CMD="sudo grub2-mkpasswd-pbkdf2"
 else
     echo "[-] Error: grub2-mkpasswd-pbkdf2 tool not found." >&2
     exit 1
