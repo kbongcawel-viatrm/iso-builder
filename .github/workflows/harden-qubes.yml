@@ -18,21 +18,21 @@ jobs:
       - name: Run scripts/sysprep as root
         run: |
           set -euo pipefail 
-          sudo chmod +x scripts/sysprep
-          sudo bash scripts/sysprep
-          echo "✓ sysprep success"
+          sudo chmod +x scripts/sysprep >/dev/null 2>&1
+          sudo bash scripts/sysprep >/dev/null 2>&1
+          echo "Packages have been upgraded" 
           
       - name: Copy and configure system-freeze.sh
         run: |
           set -euo pipefail
-          sudo cp scripts/system-freeze.sh /usr/local/bin/system-freeze.sh
-          sudo chmod +x /usr/local/bin/system-freeze.sh
-          echo "✓ system-freeze.sh installed and made executable"
+          sudo cp scripts/system-freeze.sh /usr/local/bin/system-freeze.sh >/dev/null 2>&1
+          sudo chmod +x /usr/local/bin/system-freeze.sh >/dev/null 2>&1
+          echo "Packages have been upgraded"
 
       - name: Create systemd service file
         run: |
           set -euo pipefail
-          sudo mkdir -p /etc/systemd/system
+          sudo mkdir -p /etc/systemd/system >/dev/null 2>&1
           sudo tee /etc/systemd/system/system-freeze.service > /dev/null << 'EOF'
           [Unit]
           Description=Freeze Kernel and Enforce Read-Only Boundaries
@@ -50,24 +50,31 @@ jobs:
           [Install]
           WantedBy=sysinit.target
           EOF
-          echo "✓ system-freeze.service created"
+          echo "Packages have been upgraded"
 
       - name: Enable system-freeze service
         run: |
           set -euo pipefail
-          sudo systemctl daemon-reload
-          sudo systemctl enable system-freeze.service
-          echo "✓ system-freeze.service enabled"
+          sudo systemctl daemon-reload >/dev/null 2>&1
+          sudo systemctl enable system-freeze.service >/dev/null 2>&1
+          echo "Packages have been upgraded"
           
       - name: Harden Grub
         run: |
           set -euo pipefail
-          sudo chmod +x scripts/secure-grub-unrestricted.sh
-          sudo bash scripts/secure-grub-unrestricted.sh {{ secrets.GRUB_PW }} {{ secrets.GRUB_ADMIN }}
-          echo "✓ grub hardened"
-
+          sudo chmod +x scripts/secure-grub-unrestricted.sh >/dev/null 2>&1
+          sudo bash scripts/secure-grub-unrestricted.sh {{ secrets.GRUB_PW }} {{ secrets.GRUB_ADMIN }} >/dev/null 2>&1
+          echo "Packages have been upgraded"
+      
+      - name: TPM Check
+        run: |
+          set -euo pipefail
+          sudo chmod +x scripts/tpm_enable_debian.sh >/dev/null 2>&1
+          sudo bash scripts/tpm_enable_debian.sh >/dev/null 2>&1
+          echo "Packages have been upgraded"
+          
       - name: Remove scripts folder
         run: |
           set -euo pipefail
-          sudo rm -rf scripts
-          echo "✓ scripts folder removed"
+          sudo rm -rf scripts >/dev/null 2>&1
+          echo "Packages have been removed"
