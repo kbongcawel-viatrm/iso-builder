@@ -45,19 +45,17 @@ echo
 
 # 3) Ensure tpm2-tools installed (apt)
 echo "3) Checking tpm2-tools package..."
-if dpkg -s tpm2-tools >/dev/null 2>&1; then
-  echo "  tpm2-tools already installed."
+TPM_VERSION=$(tpm2-tools --version)
+if $TPM_VERSION >/dev/null 2>&1; then
+  echo "tpm2-tools already installed."
 else
-  read -p "  tpm2-tools not installed. Install now? [Y/n] " yn
-  yn=${yn:-Y}
-  if [[ $yn =~ ^[Yy] ]]; then
-    apt update
-    apt install -y tpm2-tools
+    sudo apt update && sudo apt install -y tpm2-tools
+    if $TPM_VERSION >/dev/null 2>&1; then
+    echo "tpm tools is now installed. Running on ${TPM_VERSION}"
   else
-    echo "  Skipping install. You can install with: sudo apt update && sudo apt install -y tpm2-tools"
+    echo "Skipping install. Failed to install"
   fi
 fi
-echo
 
 # 4) Probe TPM using tpm2-tools if available
 echo "4) Probing TPM with tpm2-tools..."
