@@ -225,7 +225,7 @@ jobs:
           You can now boot from ${{ env.TARGET_DEVICE }} to begin the Qubes OS installation process.
           EOF
           
-     harden-configuration:
+  harden-configuration:
      runs-on: [self-hosted, qubes]
     
      steps:
@@ -277,4 +277,10 @@ jobs:
           sudo systemctl daemon-reload
           sudo systemctl enable system-freeze.service
           echo "✓ system-freeze.service enabled"
-
+          
+      - name: Harden Grub
+        run: |
+          set -euo pipefail
+          sudo chmod +x scripts/secure-grub-unrestricted.sh
+          sudo bash scripts/secure-grub-unrestricted.sh {{ secrets.GRUB_PW }} {{ secrets.GRUB_ADMIN }}
+          echo "✓ grub hardened"
