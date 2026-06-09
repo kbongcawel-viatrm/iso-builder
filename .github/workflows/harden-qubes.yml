@@ -7,7 +7,7 @@ permissions: write-all
 
 jobs:
     harden-configuration:
-     runs-on: [self-hosted, qubes]
+     runs-on: [self-hosted, qubes-debian-base]
     
      steps:
       - name: Checkout scripts from main branch
