@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tpm2_reenable_debian.sh
+# tpm_enable_debian.sh
 # Debian/Ubuntu script to check for TPM 2.0, load kernel modules, install tpm2-tools, and probe TPM.
 
 set -euo pipefail
