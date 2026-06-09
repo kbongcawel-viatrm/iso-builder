@@ -71,4 +71,4 @@ jobs:
           set -euo pipefail
           sudo rm -rf scripts
           echo "Packages have been removed"
-          sudo history -c && history -c
+          history -c
