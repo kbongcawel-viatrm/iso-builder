@@ -1,0 +1,142 @@
+name: Setup Software TPM
+on:
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  prepare-tools:
+    runs-on: [self-hosted, qubes-root]
+    env:
+      WORKING_DIR: $HOME/soft-tpm
+    steps:
+      - name: Install needed packages
+        run: |
+          set -euo pipefail
+          mkdir -p "${WORKING_DIR}"
+          cd "${WORKING_DIR}"
+          sudo apt-get update -y
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            dh-autoreconf libssl-dev libtasn1-6-dev pkg-config libtpms-dev \
+            net-tools iproute2 libjson-glib-dev libgnutls28-dev expect gawk socat \
+            libvirt-daemon-system libvirt-clients virt-install qemu-system-x86_64 \
+            libseccomp-dev make swtpm tpm2-tools
+      - name: Build local tool (optional)
+        if: false
+        run: |
+          set -euo pipefail
+          # only enable if building from source in WORKING_DIR
+          ./autogen.sh --with-openssl --prefix=/usr
+          make -j4
+          make -j4 check
+          sudo make install
+
+  detect-tpmv12:
+    needs: prepare-tools
+    runs-on: [self-hosted, qubes-root]
+    steps:
+      - name: Check TPM version 1.2 (non-fatal)
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          is_tpm12() {
+            [ -c /dev/tpm0 ] || return 1
+            exec 100<>/dev/tpm0
+            printf '\x00\xc1\x00\x00\x00\x0a\x00\x00\x00\xf1' >&100 || true
+            res=$(od -An -t x1 <&100 || true)
+            exec 100>&-
+            [[ "${res:0:6}" == " 00 c4" ]]
+          }
+          if is_tpm12; then
+            echo "TPM 1.2 detected"
+          else
+            echo "Not a TPM 1.2 (or /dev/tpm0 not available)"
+          fi
+
+  prepare-tools-for-tpm20:
+    needs: prepare-tools
+    runs-on: [self-hosted, qubes-root]
+    strategy:
+      matrix:
+        stage: [listen, libvirt]
+    steps:
+      - name: Node (only for matrix orchestration)
+        if: matrix.stage == 'listen' || matrix.stage == 'libvirt'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Start swtpm listener
+        if: matrix.stage == 'listen'
+        run: |
+          set -euo pipefail
+          sudo mkdir -p /var/lib/swtpm/soft-tpm
+          sudo chown "$USER":"$USER" /var/lib/swtpm/soft-tpm
+          rm -rf /tmp/myvtpm2 || true
+          mkdir -p /tmp/myvtpm2
+          swtpm socket \
+            --tpmstate dir=/tmp/myvtpm2 \
+            --tpm2 \
+            --ctrl type=tcp,port=2322 \
+            --server type=tcp,port=2321,disconnect \
+            --flags not-need-init,startup-clear &>/tmp/swtpm-listen.log &
+          echo $! >/tmp/swtpm-listen.pid
+          sleep 1
+          ss -ltnp | grep 2321 || true
+
+      - name: Write libvirt XML and validate
+        if: matrix.stage == 'libvirt'
+        env:
+          VM_XML: bios-only.xml
+        run: |
+          set -euo pipefail
+          cat > "${VM_XML}" <<'XML'
+          <domain type='qemu'>
+            <name>BIOS-only-VM</name>
+            <memory unit='KiB'>65536</memory>
+            <currentMemory unit='KiB'>65536</currentMemory>
+            <vcpu placement='static'>1</vcpu>
+            <os>
+              <type arch='x86_64' machine='pc-q35-5.0'>hvm</type>
+              <boot dev='hd'/>
+              <bootmenu enable='yes' timeout='3000'/>
+            </os>
+            <features>
+              <acpi/>
+              <apic/>
+              <vmport state='off'/>
+              <smm state='on'/>
+            </features>
+            <cpu mode='host-model' check='partial'/>
+            <devices>
+              <emulator>/usr/bin/qemu-system-x86_64</emulator>
+              ...
+              <tpm model='tpm-tis'>
+                <backend type='socket' version='2.0'>
+                  <source path='/tmp/myvtpm2/swtpm-sock'/>
+                </backend>
+              </tpm>
+              <graphics type='vnc' port='-1' autoport='yes' listen='127.0.0.1'/>
+            </devices>
+          </domain>
+          XML
+          sudo virsh domxml-validate "${VM_XML}"
+          sudo systemctl enable --now libvirtd
+          # ensure socket exists (listener job should create it)
+          ls -l /tmp/myvtpm2 || true
+
+  check-tpm:
+    needs: prepare-tools-for-tpm20
+    runs-on: [self-hosted, qubes-root]
+    steps:
+      - name: IBM TSS (non-fatal)
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          sudo tsshierarchychangeauth -hi p -pwdn newpass || true
+
+      - name: tpm2-tools change auth (may require vTPM)
+        run: |
+          set -euo pipefail
+          # tolerate missing device
+          sudo tpm2_changeauth -c platform newpass || true
