@@ -6,18 +6,16 @@
 
 set -euo pipefail
 
-# Ensure script is run as root inside dom0
 if [ "$(id -u)" -ne 0 ]; then
     echo "[-] Error: This script must be run as root." >&2
     exit 1
 fi
 
-if [ ! -f /etc/qubes-release ]; then
-    echo "[-] Warning: Qubes OS signature not detected in /etc/qubes-release." >&2
+if [ ! -f /etc/os-release ]; then
+    echo "[-] Warning: Qubes OS signature not detected in /etc/os-release." >&2
     echo "    Ensure you are running this explicitly inside dom0." >&2
 fi
 
-# Ensure a password argument was passed
 if [ -z "${1:-}" ]; then
     echo "[-] Error: Missing password argument." >&2
     echo "    Usage: sudo $0 'your_secure_password'" >&2
@@ -29,16 +27,14 @@ PLAIN_PASSWORD="$1"
 GRUB_USER="$2"
 
 echo "[+] Phase 1: Checking and temporarily remounting boot directories if needed..."
-# Dom0 /boot may occasionally be mounted read-only depending on hardening setups
 if mount | grep -E " on /boot type .* \(ro," > /dev/null; then
     echo "[*] /boot filesystem is currently Read-Only. Remounting writeable..."
     mount -o remount,rw /boot
 fi
 
 echo "[+] Phase 2: Generating salted PBKDF2 hash using Qubes/Fedora binaries..."
-# Qubes OS uses the 'grub2-' prefixed tools natively
-if grub2-mkpasswd-pbkdf2 --version >/dev/null 2>&1; then
-    GRUB_MKPASSWD_CMD="grub2-mkpasswd-pbkdf2"
+if grub-mkpasswd-pbkdf2 --version >/dev/null 2>&1; then
+    GRUB_MKPASSWD_CMD="grub-mkpasswd-pbkdf2"
 else
     echo "[-] Error: grub2-mkpasswd-pbkdf2 tool not found." >&2
     exit 1
