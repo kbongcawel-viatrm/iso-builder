@@ -36,7 +36,7 @@ echo "[+] Phase 2: Generating salted PBKDF2 hash using Qubes/Fedora binaries..."
 if grub-mkpasswd-pbkdf2 --version >/dev/null 2>&1; then
     GRUB_MKPASSWD_CMD="grub-mkpasswd-pbkdf2"
 else
-    echo "[-] Error: grub2-mkpasswd-pbkdf2 tool not found." >&2
+    echo "[-] Error: grub-mkpasswd-pbkdf2 tool not found." >&2
     exit 1
 fi
 
@@ -98,8 +98,8 @@ if [ -f "$GRUB_CFG_PATH" ]; then
     cp "$GRUB_CFG_PATH" "${GRUB_CFG_PATH}.bak"
 fi
 
-echo "[+] Phase 6: Executing grub2-mkconfig pipeline..."
-grub2-mkconfig -o "$GRUB_CFG_PATH"
+echo "[+] Phase 6: Executing grub-mkconfig pipeline..."
+grub-mkconfig -o "$GRUB_CFG_PATH"
 
 echo "[+] Phase 7: Verification scan..."
 # Ensure that your primary Xen or Linux entry points contain the required override flag
