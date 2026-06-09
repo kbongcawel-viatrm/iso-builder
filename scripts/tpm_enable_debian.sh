@@ -45,7 +45,7 @@ echo
 
 # 3) Ensure tpm2-tools installed (apt)
 echo "3) Checking tpm2-tools package..."
-TPM_VERSION=$(tpm2-tools --version)
+TPM_VERSION=echo $(tpm2-tools --version)
 if $TPM_VERSION >/dev/null 2>&1; then
   echo "tpm2-tools already installed."
 else
