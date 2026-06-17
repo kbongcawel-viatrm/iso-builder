@@ -1,0 +1,36 @@
+name: Restore Laptop From External SSD
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type RESTORE-INTERNAL to overwrite the laptop internal SSD"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  restore:
+    runs-on: self-hosted
+    environment: disk-restore
+
+    steps:
+      - name: Validate confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "RESTORE-INTERNAL" ]; then
+            echo "Confirmation failed."
+            exit 1
+          fi
+
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Show disks
+        run: |
+          lsblk -o NAME,SIZE,MODEL,SERIAL,TRAN,TYPE,MOUNTPOINTS
+          ls -l /dev/disk/by-id/
+
+      - name: Restore external SSD to laptop internal SSD
+        run: |
+          sudo scripts/restore-external-to-internal.sh
