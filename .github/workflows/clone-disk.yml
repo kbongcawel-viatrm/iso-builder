@@ -1,4 +1,4 @@
-name: Restore Laptop From External SSD
+name: Restore External SSD to Laptop Internal SSD
 
 on:
   workflow_dispatch:
@@ -6,31 +6,144 @@ on:
       confirm:
         description: "Type RESTORE-INTERNAL to overwrite the laptop internal SSD"
         required: true
+        type: string
+      dry_run:
+        description: "Only validate disks; do not clone"
+        required: true
+        default: true
+        type: boolean
 
 permissions:
   contents: read
 
 jobs:
   restore:
-    runs-on: self-hosted
+    name: Restore external SSD to internal SSD
+    runs-on: [self-hosted, linux]
+
+    # Optional but strongly recommended:
+    # Create this environment in GitHub and require manual approval.
     environment: disk-restore
 
     steps:
-      - name: Validate confirmation
+      - name: Validate confirmation input
+        shell: bash
         run: |
+          set -euo pipefail
+
           if [ "${{ github.event.inputs.confirm }}" != "RESTORE-INTERNAL" ]; then
             echo "Confirmation failed."
+            echo "You must type RESTORE-INTERNAL exactly."
             exit 1
           fi
 
-      - name: Check out repo
-        uses: actions/checkout@v4
-
-      - name: Show disks
+      - name: Show detected disks
+        shell: bash
         run: |
+          set -euo pipefail
+
+          echo "Detected block devices:"
           lsblk -o NAME,SIZE,MODEL,SERIAL,TRAN,TYPE,MOUNTPOINTS
+          echo
+
+          echo "Stable disk IDs:"
           ls -l /dev/disk/by-id/
 
-      - name: Restore external SSD to laptop internal SSD
+      - name: Restore external USB SSD to laptop internal SSD
+        shell: bash
         run: |
-          sudo scripts/restore-external-to-internal.sh
+          set -euo pipefail
+
+          # CHANGE THESE TWO VALUES.
+          #
+          # Find them from the "Stable disk IDs" step above.
+          #
+          # SOURCE must be your external USB SSD.
+          # TARGET must be your laptop internal SSD.
+          SOURCE="/dev/sda"
+          TARGET="/dev/nvme0n1"
+
+          echo "Restore direction:"
+          echo "  SOURCE external USB SSD: $SOURCE"
+          echo "  TARGET internal SSD:     $TARGET"
+          echo
+
+          if [ ! -b "$SOURCE" ]; then
+            echo "Source disk not found: $SOURCE"
+            exit 1
+          fi
+
+          if [ ! -b "$TARGET" ]; then
+            echo "Target disk not found: $TARGET"
+            exit 1
+          fi
+
+          SOURCE_REAL="$(readlink -f "$SOURCE")"
+          TARGET_REAL="$(readlink -f "$TARGET")"
+
+          if [ "$SOURCE_REAL" = "$TARGET_REAL" ]; then
+            echo "Source and target resolve to the same disk. Aborting."
+            exit 1
+          fi
+
+          SOURCE_TRAN="$(lsblk -ndo TRAN "$SOURCE_REAL" 2>/dev/null || true)"
+          TARGET_TRAN="$(lsblk -ndo TRAN "$TARGET_REAL" 2>/dev/null || true)"
+
+          echo "Resolved source: $SOURCE_REAL"
+          echo "Resolved target: $TARGET_REAL"
+          echo "Source transport: ${SOURCE_TRAN:-unknown}"
+          echo "Target transport: ${TARGET_TRAN:-unknown}"
+          echo
+
+          if [ "$SOURCE_TRAN" != "usb" ]; then
+            echo "Source does not appear to be USB. Aborting."
+            exit 1
+          fi
+
+          if [ "$TARGET_TRAN" = "usb" ]; then
+            echo "Target appears to be USB, but target should be internal. Aborting."
+            exit 1
+          fi
+
+          SOURCE_SIZE="$(blockdev --getsize64 "$SOURCE_REAL")"
+          TARGET_SIZE="$(blockdev --getsize64 "$TARGET_REAL")"
+
+          echo "Source size bytes: $SOURCE_SIZE"
+          echo "Target size bytes: $TARGET_SIZE"
+          echo
+
+          if [ "$TARGET_SIZE" -lt "$SOURCE_SIZE" ]; then
+            echo "Target internal SSD is smaller than source external SSD. Aborting."
+            exit 1
+          fi
+
+          echo "Mounted partitions check:"
+          lsblk -nr -o NAME,MOUNTPOINTS "$TARGET_REAL"
+          echo
+
+          if lsblk -nr -o MOUNTPOINTS "$TARGET_REAL" | grep -q '/'; then
+            echo "A target partition appears to be mounted. Aborting."
+            echo "Boot from the recovery USB, not from the internal disk."
+            exit 1
+          fi
+
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            echo "Dry run enabled. Validation passed, but no clone was performed."
+            exit 0
+          fi
+
+          echo "DANGER: About to overwrite the laptop internal SSD:"
+          echo "$TARGET_REAL"
+          echo
+
+          sudo dd \
+            if="$SOURCE_REAL" \
+            of="$TARGET_REAL" \
+            bs=64M \
+            status=progress \
+            conv=fsync
+
+          sync
+
+          echo "Restore complete."
+          echo "Shut down, remove the recovery USB, then boot from the internal SSD."
