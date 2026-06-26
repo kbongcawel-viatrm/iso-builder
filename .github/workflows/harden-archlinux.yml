@@ -12,6 +12,7 @@ on:
   push:
     branches:
       - main
+      
     paths:
       - "ansible/hardening/archlinux/harden.yml"
       - "ansible/hardening/archlinux/desktop.yml"
@@ -31,6 +32,10 @@ jobs:
     name: Validate Playbooks
     runs-on: ubuntu-latest
 
+  defaults:
+    run:
+      working-directory: ansible/harden/archlinux
+  
     steps:
       - name: Checkout
         uses: actions/checkout@v4
