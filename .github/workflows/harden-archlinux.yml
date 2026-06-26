@@ -1,1 +1,147 @@
+name: Hardening and Bootstrapping Arch Linux
 
+on:
+  workflow_dispatch:
+    inputs:
+      check_mode:
+        description: "Run Ansible in dry-run mode"
+        required: false
+        default: false
+        type: boolean
+
+  push:
+    branches:
+      - main
+    paths:
+      - "harden.yml"
+      - "desktop.yml"
+      - "templates/**"
+      - "group_vars/**"
+      - "inventory.ini"
+
+concurrency:
+  group: arch-bootstrap
+  cancel-in-progress: false
+
+env:
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+
+  validate:
+    name: Validate Playbooks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          pip install \
+            ansible \
+            ansible-lint
+
+          ansible-galaxy collection install \
+            community.general
+
+      - name: Lint playbooks
+        run: |
+          ansible-lint harden.yml
+          ansible-lint desktop.yml
+
+      - name: Syntax check harden.yml
+        run: |
+          ansible-playbook \
+            -c local \
+            harden.yml \
+            --syntax-check
+
+      - name: Syntax check desktop.yml
+        run: |
+          ansible-playbook \
+            -c local \
+            desktop.yml \
+            --syntax-check
+
+  deploy:
+    name: Apply Playbooks
+    runs-on:
+      - self-hosted
+      - archlinux
+
+    needs:
+      - validate
+
+    if: github.event_name == 'workflow_dispatch'
+
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          pip install ansible
+
+          ansible-galaxy collection install \
+            community.general
+
+      - name: Verify local runner
+        run: |
+          uname -a
+          whoami
+          ansible --version
+
+      - name: Run hardening playbook
+        shell: bash
+        run: |
+          EXTRA=""
+
+          if [ "${{ inputs.check_mode }}" = "true" ]; then
+            EXTRA="--check"
+          fi
+
+          ansible-playbook \
+            -c local \
+            harden.yml \
+            --diff \
+            $EXTRA
+
+      - name: Run desktop playbook
+        shell: bash
+        run: |
+          EXTRA=""
+
+          if [ "${{ inputs.check_mode }}" = "true" ]; then
+            EXTRA="--check"
+          fi
+
+          ansible-playbook \
+            -c local \
+            desktop.yml \
+            --diff \
+            $EXTRA
+
+      - name: Show completion
+        run: |
+          echo "Bootstrap completed"
