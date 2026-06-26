@@ -28,8 +28,8 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: /ansible/harden/archlinux   
- 
+        working-directory: ansible/harden/archlinux   
+   
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -58,13 +58,13 @@ jobs:
 
       - name: Lint playbooks
         run: |
-          cd ${{ runner.temp }}/ansible/harden/archlinux
+          cd ansible/harden/archlinux
           ansible-lint harden.yml
           ansible-lint desktop.yml
 
       - name: Syntax check harden.yml
         run: |
-          cd ${{ runner.temp }}/ansible/harden/archlinux
+          cd ansible/harden/archlinux
           ansible-playbook \
             -c local \
             harden.yml \
@@ -72,7 +72,7 @@ jobs:
 
       - name: Syntax check desktop.yml
         run: |
-          cd ${{ runner.temp }}/ansible/harden/archlinux
+          cd ansible/harden/archlinux
           ansible-playbook \
             -c local \
             desktop.yml \
