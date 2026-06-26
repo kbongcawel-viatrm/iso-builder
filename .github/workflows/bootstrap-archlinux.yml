@@ -28,7 +28,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: ansible/harden/archlinux   
+        working-directory: $RUNNER_TEMP/iso-builder/ansible/harden/archlinux   
    
     steps:
       - name: Checkout code
