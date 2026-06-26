@@ -56,19 +56,16 @@ jobs:
              ls -la
              find . -maxdepth 3 -type f
              echo "--"
-             echo "Git Directory"
-             echo $GIT_DIR 
-             ls -al $GIT_DIR/
 
       - name: Lint playbooks
         run: |
-             cd $HOME/
+             cd /home/runner/work/iso-builder/iso-builder/ansible/harden/archlinux/
              ansible-lint harden.yml
              ansible-lint desktop.yml
 
       - name: Syntax check harden.yml
         run: |
-             cd ansible/harden/archlinux
+             cd /home/runner/work/iso-builder/iso-builder/ansible/harden/archlinux/
              ansible-playbook \
                -c local \
                harden.yml \
@@ -76,7 +73,7 @@ jobs:
 
       - name: Syntax check desktop.yml
         run: |
-             cd ansible/harden/archlinux
+             cd /home/runner/work/iso-builder/iso-builder/ansible/harden/archlinux
              ansible-playbook \
                -c local \
                desktop.yml \
