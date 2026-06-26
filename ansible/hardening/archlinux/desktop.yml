@@ -1,0 +1,41 @@
+---
+- name: Set up Arch Linux desktop with KDE Plasma
+  hosts: all
+  become: true
+
+  tasks:
+    - name: Update package database and system
+      pacman:
+        update_cache: yes
+        upgrade: yes
+
+    - name: Install desktop packages
+      pacman:
+        name:
+          - xorg
+          - plasma
+          - sddm
+          - networkmanager
+          - plasma-nm
+          - xf86-input-libinput
+          - pipewire
+          - pipewire-audio
+          - pipewire-pulse
+          - wireplumber
+          - dolphin
+          - konsole
+          - xdg-utils
+          - firefox
+          - ark
+          - kate
+        state: present
+
+    - name: Enable SDDM
+      systemd:
+        name: sddm
+        enabled: true
+
+    - name: Enable NetworkManager
+      systemd:
+        name: NetworkManager
+        enabled: true
