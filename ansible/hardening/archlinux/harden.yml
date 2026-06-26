@@ -1,0 +1,57 @@
+---
+- name: Harden Arch Linux kernel
+  hosts: arch
+  become: true
+
+  vars_files:
+    - group_vars/all.yml
+
+  tasks:
+    - name: Install hardening packages
+      community.general.pacman:
+        name:
+          - apparmor
+          - apparmor-utils
+          - audit
+          - lynis
+          - "{{ 'linux-hardened' if install_linux_hardened else omit }}"
+          - "{{ 'linux-hardened-headers' if install_linux_hardened else omit }}"
+        state: present
+
+    - template:
+        src: templates/99-kernel-hardening.conf.j2
+        dest: /etc/sysctl.d/99-kernel-hardening.conf
+
+    - command: sysctl --system
+      changed_when: true
+
+    - template:
+        src: templates/security-blacklist.conf.j2
+        dest: /etc/modprobe.d/security-blacklist.conf
+
+    - command: mkinitcpio -P
+      changed_when: true
+
+    - systemd:
+        name: apparmor.service
+        enabled: true
+        state: started
+      when: enable_apparmor
+
+    - template:
+        src: templates/kernel-hardening.service.j2
+        dest: /etc/systemd/system/kernel-hardening.service
+
+    - systemd:
+        daemon_reload: true
+
+    - systemd:
+        name: kernel-hardening.service
+        enabled: true
+
+    - template:
+        src: templates/grub-hardening.j2
+        dest: /etc/default/grub
+
+    - command: grub-mkconfig -o /boot/grub/grub.cfg
+      changed_when: true
