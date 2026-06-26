@@ -12,16 +12,14 @@ on:
   push:
     branches:
        - main
-    paths:
-       - "ansible/harden/archlinux/**"
 
 concurrency:
-   group: arch-bootstrap
-   cancel-in-progress: false
+    group: arch-bootstrap
+    cancel-in-progress: false
 
 env:
-  PYTHONUNBUFFERED: 1
-
+    PYTHONUNBUFFERED: 1
+    
 jobs:
   validate:
     name: Validate Playbooks
@@ -30,7 +28,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: ansible/harden/archlinux   
+        working-directory: /ansible/harden/archlinux   
  
     steps:
       - name: Checkout code
@@ -60,13 +58,13 @@ jobs:
 
       - name: Lint playbooks
         run: |
-          cd ansible/harden/archlinux
+          cd ${{ runner.temp }}/ansible/harden/archlinux
           ansible-lint harden.yml
           ansible-lint desktop.yml
 
       - name: Syntax check harden.yml
         run: |
-          cd ansible/harden/archlinux
+          cd ${{ runner.temp }}/ansible/harden/archlinux
           ansible-playbook \
             -c local \
             harden.yml \
@@ -74,7 +72,7 @@ jobs:
 
       - name: Syntax check desktop.yml
         run: |
-          cd ansible/harden/archlinux
+          cd ${{ runner.temp }}/ansible/harden/archlinux
           ansible-playbook \
             -c local \
             desktop.yml \
@@ -96,7 +94,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: ansible/harden/archlinux
+        working-directory: ${{ github.workspace }}/ansible/harden/archlinux
 
     steps:
 
@@ -130,7 +128,8 @@ jobs:
           if [ "${{ inputs.check_mode }}" = "true" ]; then
             EXTRA="--check"
           fi
-
+          
+          cd $ {{ github.workspace }}/ansible/harden/archlinux
           ansible-playbook \
             -c local \
             harden.yml \
@@ -144,7 +143,8 @@ jobs:
           if [ "${{ inputs.check_mode }}" = "true" ]; then
             EXTRA="--check"
           fi
-
+          
+          cd $ {{ github.workspace }}/ansible/harden/archlinux
           ansible-playbook \
            -c local \
            desktop.yml \
