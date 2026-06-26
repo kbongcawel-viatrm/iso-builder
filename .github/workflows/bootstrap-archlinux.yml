@@ -1,154 +1,151 @@
 name: Hardening and Bootstrapping Arch Linux
 
 on:
-workflow_dispatch:
-inputs:
-check_mode:
-description: "Run Ansible in dry-run mode"
-required: false
-default: false
-type: boolean
+  workflow_dispatch:
+    inputs:
+      check_mode:
+        description: "Run Ansible in dry-run mode"
+        required: false
+        default: false
+        type: boolean
 
-push:
-branches:
-- main
-paths:
-- "ansible/harden/archlinux/**"
+  push:
+    branches:
+       - main
+    paths:
+       - "ansible/harden/archlinux/**"
 
 concurrency:
-group: arch-bootstrap
-cancel-in-progress: false
+   group: arch-bootstrap
+   cancel-in-progress: false
 
 env:
-PYTHONUNBUFFERED:
-"1"
+  PYTHONUNBUFFERED: 1
 
 jobs:
   validate:
     name: Validate Playbooks
     runs-on: ubuntu-latest
     
-  steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.12"
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
-    - name: Install dependencies
-      run: |
-        set -euxo pipefail
+      - name: Install dependencies
+        run: |
+          set -euxo pipefail
 
-        pip install \
-          ansible \
-          ansible-lint
+          pip install \
+            ansible \
+            ansible-lint
+
+            ansible-galaxy collection install \
+              community.general
+
+      - name: Verify repository structure
+        run: |
+          pwd
+          ls -la
+          find . -maxdepth 3 -type f
+
+      - name: Lint playbooks
+        run: |
+          cd ansible/harden/archlinux
+          ansible-lint harden.yml
+          ansible-lint desktop.yml
+
+      - name: Syntax check harden.yml
+        run: |
+          cd ansible/harden/archlinux
+          ansible-playbook \
+            -c local \
+            harden.yml \
+            --syntax-check
+
+      - name: Syntax check desktop.yml
+        run: |
+          cd ansible/harden/archlinux
+          ansible-playbook \
+            -c local \
+            desktop.yml \
+            --syntax-check
+
+  deploy:
+    name: Apply Playbooks
+
+    runs-on:
+      - self-hosted
+      - archlinux
+
+    needs:
+      - validate
+
+    if: github.event_name == 'workflow_dispatch'
+    timeout-minutes: 120
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: ansible/harden/archlinux
+
+    steps:
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+           python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          set -euxo pipefail
+          pip install ansible
 
           ansible-galaxy collection install \
             community.general
 
-    - name: Verify repository structure
-      run: |
-        pwd
-        ls -la
-        find . -maxdepth 3 -type f
+      - name: Verify local runner
+        run: |
+          pwd
+          uname -a
+          whoami
+          ansible --version
 
-    - name: Lint playbooks
-      run: |
-        cd ansible/harden/archlinux
-        ansible-lint harden.yml
-        ansible-lint desktop.yml
+      - name: Run hardening playbook
+        run: |
+          EXTRA=""
 
-    - name: Syntax check harden.yml
-      run: |
-        cd ansible/harden/archlinux
-        ansible-playbook \
-          -c local \
-          harden.yml \
-          --syntax-check
+          if [ "${{ inputs.check_mode }}" = "true" ]; then
+            EXTRA="--check"
+          fi
 
-    - name: Syntax check desktop.yml
-      run: |
-        cd ansible/harden/archlinux
-        ansible-playbook \
-          -c local \
-          desktop.yml \
-          --syntax-check
+          ansible-playbook \
+            -c local \
+            harden.yml \
+            --diff \
+          $EXTRA
 
-deploy:
-name: Apply Playbooks
+      - name: Run desktop playbook
+        run: |
+          EXTRA=""
 
-runs-on:
-  - self-hosted
-  - archlinux
+          if [ "${{ inputs.check_mode }}" = "true" ]; then
+            EXTRA="--check"
+          fi
 
-needs:
-  - validate
+          ansible-playbook \
+           -c local \
+           desktop.yml \
+           --diff \
+          $EXTRA
 
-if: github.event_name == 'workflow_dispatch'
-
-timeout-minutes: 120
-
-defaults:
-  run:
-    shell: bash
-    working-directory: ansible/harden/archlinux
-
-steps:
-
-  - name: Checkout code
-    uses: actions/checkout@v4
-
-  - name: Setup Python
-    uses: actions/setup-python@v5
-    with:
-      python-version: "3.12"
-
-  - name: Install dependencies
-    run: |
-      set -euxo pipefail
-
-      pip install ansible
-
-      ansible-galaxy collection install \
-        community.general
-
-  - name: Verify local runner
-    run: |
-      pwd
-      uname -a
-      whoami
-      ansible --version
-
-  - name: Run hardening playbook
-    run: |
-      EXTRA=""
-
-      if [ "${{ inputs.check_mode }}" = "true" ]; then
-        EXTRA="--check"
-      fi
-
-      ansible-playbook \
-        -c local \
-        harden.yml \
-        --diff \
-        $EXTRA
-
-  - name: Run desktop playbook
-    run: |
-      EXTRA=""
-
-      if [ "${{ inputs.check_mode }}" = "true" ]; then
-        EXTRA="--check"
-      fi
-
-      ansible-playbook \
-        -c local \
-        desktop.yml \
-        --diff \
-        $EXTRA
-
-  - name: Show completion
-    run: |
-      echo "Playbook deployment finished"
+      - name: Show completion
+        run: |
+          echo "Playbook deployment finished"
