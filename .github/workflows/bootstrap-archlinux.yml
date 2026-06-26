@@ -1,7 +1,7 @@
 name: Hardening and Bootstrapping Arch Linux
 
 on:
-  workflow_dispatch:
+workflow_dispatch:
 inputs:
 check_mode:
 description: "Run Ansible in dry-run mode"
@@ -20,7 +20,8 @@ group: arch-bootstrap
 cancel-in-progress: false
 
 env:
-    PYTHONUNBUFFERED: "1"
+PYTHONUNBUFFERED:
+"1"
 
 jobs:
   validate:
@@ -69,7 +70,7 @@ jobs:
 
     - name: Syntax check desktop.yml
       run: |
-        
+        cd ansible/harden/archlinux
         ansible-playbook \
           -c local \
           desktop.yml \
