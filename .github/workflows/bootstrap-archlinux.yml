@@ -54,12 +54,13 @@ jobs:
              echo "$PWD is my current directory"
              echo "--"
              ls -la
-             find . -maxdepth 3 -type f
+             cd ansible/
+             ls -al
              echo "--"
 
       - name: Lint playbooks
         run: |
-             cd /home/runner/work/iso-builder/iso-builder/ansible/harden/archlinux/
+             cd ansible/
              ansible-lint harden.yml
              ansible-lint desktop.yml
 
