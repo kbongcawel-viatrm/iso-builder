@@ -13,11 +13,10 @@ on:
     branches:
       - main
     paths:
-      - "harden.yml"
-      - "desktop.yml"
-      - "templates/**"
-      - "group_vars/**"
-      - "inventory.ini"
+      - "ansible/hardening/archlinux/harden.yml"
+      - "ansible/hardening/archlinux/desktop.yml"
+      - "ansible/hardening/archlinux/templates/**"
+      - "ansible/hardening/archlinux/group_vars/**"
 
 concurrency:
   group: arch-bootstrap
