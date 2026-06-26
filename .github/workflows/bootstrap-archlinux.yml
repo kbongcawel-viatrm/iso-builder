@@ -19,19 +19,16 @@ concurrency:
 
 env:
     PYTHONUNBUFFERED: 1
-    GIT_DIR: $HOME/iso-builder
     
 jobs:
   validate:
     name: Validate Playbooks
     runs-on: ubuntu-latest
-  
-    steps: 
-      - name: Change directory 
-        run: |
-             set -euxo pipefail
-             cd $HOME
-      
+    defaults:
+      run: 
+        working-directory: $RUNNER_TEMP
+        
+    steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
