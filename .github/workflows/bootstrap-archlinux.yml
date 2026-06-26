@@ -19,13 +19,19 @@ concurrency:
 
 env:
     PYTHONUNBUFFERED: 1
+    GIT_DIR: $HOME/iso-builder
     
 jobs:
   validate:
     name: Validate Playbooks
     runs-on: ubuntu-latest
-
-    steps:
+  
+    steps: 
+      - name: Change directory 
+        run: |
+             set -euxo pipefail
+             cd $HOME
+      
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -49,13 +55,17 @@ jobs:
         run: |
              set -euxo pipefail
              echo "$PWD is my current directory"
-             echo "Contents:"
              echo "--"
              ls -la
              find . -maxdepth 3 -type f
+             echo "--"
+             echo "Git Directory"
+             echo $GIT_DIR 
+             ls -al $GIT_DIR/
 
       - name: Lint playbooks
         run: |
+             cd $HOME/
              ansible-lint harden.yml
              ansible-lint desktop.yml
 
