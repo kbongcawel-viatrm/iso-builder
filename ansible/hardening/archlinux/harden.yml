@@ -1,6 +1,7 @@
 ---
 - name: Harden Arch Linux kernel
-  hosts: arch
+  hosts: localhost
+  connection: local
   become: true
 
   vars_files:
