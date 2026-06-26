@@ -1,0 +1,14 @@
+[Unit]
+Description=Kernel Hardening
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/sysctl --system
+{% if lock_modules_after_boot %}
+ExecStart=/usr/bin/sh -c 'echo 1 > /proc/sys/kernel/modules_disabled'
+{% endif %}
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
