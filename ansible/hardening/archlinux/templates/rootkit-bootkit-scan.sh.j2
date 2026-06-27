@@ -1,0 +1,53 @@
+#!/bin/bash
+set -euo pipefail
+
+RESULTS_DIR="/var/log/rootkit-bootkit-check"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+SCAN_DIR="${RESULTS_DIR}/boot_scan_${TIMESTAMP}"
+
+mkdir -p "${SCAN_DIR}"
+
+# Logging function
+log_scan() {
+    local tool=$1
+    local output_file="${SCAN_DIR}/${tool}_boot_scan.txt"
+    
+    echo "=== ${tool} BOOT SCAN ===" >> "${output_file}"
+    echo "Timestamp: $(date -u)" >> "${output_file}"
+    echo "" >> "${output_file}"
+}
+
+# Run rkhunter
+log_scan "rkhunter"
+rkhunter --check --skip-keypress --report-warnings-only >> "${SCAN_DIR}/rkhunter_boot_scan.txt" 2>&1 || true
+
+# Run chkrootkit
+log_scan "chkrootkit"
+chkrootkit >> "${SCAN_DIR}/chkrootkit_boot_scan.txt" 2>&1 || true
+
+# Run AIDE if database exists
+if [ -f "/var/lib/aide/aide.db" ]; then
+    log_scan "aide"
+    aide --check >> "${SCAN_DIR}/aide_boot_scan.txt" 2>&1 || true
+fi
+
+# Run Lynis
+log_scan "lynis"
+lynis audit system quiet >> "${SCAN_DIR}/lynis_boot_scan.txt" 2>&1 || true
+
+# Generate summary
+SUMMARY_FILE="${SCAN_DIR}/BOOT_SCAN_SUMMARY.txt"
+{
+    echo "=== ROOTKIT/BOOTKIT BOOT SCAN SUMMARY ==="
+    echo "Timestamp: $(date -u)"
+    echo ""
+    echo "Scan Results:"
+    echo "  rkhunter: $(grep -q 'Warning:\|INFECTED' "${SCAN_DIR}/rkhunter_boot_scan.txt" && echo 'ALERTS FOUND ⚠' || echo 'CLEAN ✓')"
+    echo "  chkrootkit: $(grep -q 'INFECTED' "${SCAN_DIR}/chkrootkit_boot_scan.txt" && echo 'ALERTS FOUND ⚠' || echo 'CLEAN ✓')"
+    [ -f "${SCAN_DIR}/aide_boot_scan.txt" ] && echo "  AIDE: $(grep -q 'changed\|added' "${SCAN_DIR}/aide_boot_scan.txt" && echo 'ALERTS FOUND ⚠' || echo 'CLEAN ✓')"
+    echo "  Lynis: $(grep -q 'rootkit\|warning' "${SCAN_DIR}/lynis_boot_scan.txt" && echo 'ALERTS FOUND ⚠' || echo 'CLEAN ✓')"
+    echo ""
+    echo "Full results saved to: ${SCAN_DIR}"
+} | tee "${SUMMARY_FILE}"
+
+exit 0
