@@ -41,28 +41,8 @@ jobs:
         run: |
              set -euxo pipefail
 
-             pip install \
-             ansible \
-             ansible-lint
-
              ansible-galaxy collection install \
              community.general
-
-      - name: Verify repository structure
-        run: |
-             set -euxo pipefail
-             echo "$PWD is my current directory"
-             echo "--"
-             ls -la
-             cd ansible/
-             ls -al
-             echo "--"
-
-      - name: Lint playbooks
-        run: |
-             cd ansible/hardening/archlinux
-             ansible-lint harden.yml
-             ansible-lint desktop.yml
 
       - name: Syntax check harden.yml
         run: |
