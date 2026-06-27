@@ -62,11 +62,7 @@ jobs:
 
   deploy:
     name: Apply Playbooks
-
-    runs-on:
-      - self-hosted
-      - archlinux
-
+    runs-on: [self-hosted, archlinux]
     needs:
       - validate
 
@@ -141,17 +137,27 @@ jobs:
           echo "Playbook deployment finished"
           
   get-secureboot-status: 
+     needs: deploy
+     defaults:
+       run:
+         shell: bash
+         working-directory: ${{ github.workspace }}/ansible/hardening/archlinux
+
      name: Get Secureboot Status
      runs-on: [self-hosted, archlinux]
 
      steps:
-        - name: Get MOK State
-          run: |
+       
+       - name: Checkout code
+         uses: actions/checkout@v4
+        
+       - name: Get MOK State
+         run: |
                 set -euxo pipefail
-                sudo mokutil --sb-state
+                mokutil --sb-state
               
-        - name: Get Bootctl status
-          run: |
+       - name: Get Bootctl status
+         run: |
                 set -euxo pipefail
                 bootctl status
             
