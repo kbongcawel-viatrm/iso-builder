@@ -1,0 +1,19 @@
+[Unit]
+Description=Rootkit and Bootkit Detection Service (Early Boot)
+Documentation=man:rkhunter(8) man:chkrootkit(8)
+After=local-fs-pre.target
+Before=sysinit.target local-fs.target
+DefaultDependencies=no
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/rootkit-bootkit-scan
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=rootkit-bootkit-check
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target sysinit.target early-boot.target
