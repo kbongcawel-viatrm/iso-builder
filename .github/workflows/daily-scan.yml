@@ -11,7 +11,7 @@ on:
 jobs:
   hardening:
     name: Run Arch Linux Hardening Playbooks
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, archlinux]
     
     permissions:
       contents: read
