@@ -1,0 +1,257 @@
+---
+- name: AUR Malware Check - Comprehensive Test Suite
+  hosts: localhost
+  gather_facts: yes
+  
+  vars:
+    repo_url: https://github.com/lenucksi/aur-malware-check.git
+    repo_dest: /tmp/aur-malware-check
+    python_executable: python3
+    results_dir: "{{ ansible_user_dir }}/aur-malware-check-results"
+    timestamp: "{{ ansible_date_time.iso8601_basic_short }}"
+    
+  tasks:
+    - name: Validate Ansible version
+      assert:
+        that:
+          - ansible_version.major >= 2
+          - ansible_version.minor >= 10
+        fail_msg: "Ansible 2.10 or higher is required"
+        
+    - name: Install required system packages
+      ansible.builtin.package:
+        name:
+          - python3
+          - python3-pip
+          - git
+        state: present
+      become: yes
+      
+    - name: Create results directory
+      ansible.builtin.file:
+        path: "{{ results_dir }}"
+        state: directory
+        mode: '0755'
+        
+    - name: Clone the AUR malware check repository
+      ansible.builtin.git:
+        repo: "{{ repo_url }}"
+        dest: "{{ repo_dest }}"
+        version: main
+        update: yes
+      register: git_clone
+      
+    - name: Display git clone status
+      ansible.builtin.debug:
+        msg: "Repository cloned/updated successfully at {{ repo_dest }}"
+      when: git_clone.changed
+      
+    - name: Install Python dependencies
+      ansible.builtin.pip:
+        requirements: "{{ repo_dest }}/requirements.txt"
+        executable: "{{ python_executable }}"
+      ignore_errors: yes
+      register: pip_install
+      
+    - name: Display pip installation status
+      ansible.builtin.debug:
+        msg: "Python dependencies installed successfully"
+      when: pip_install is succeeded
+      
+    - name: Run basic malware check (all campaigns)
+      ansible.builtin.shell:
+        cmd: "cd {{ repo_dest }} && {{ python_executable }} -m aur_check"
+      register: basic_check
+      ignore_errors: yes
+      
+    - name: Save basic check results
+      ansible.builtin.copy:
+        content: "{{ basic_check.stdout }}\n{{ basic_check.stderr }}"
+        dest: "{{ results_dir }}/01_basic_check_{{ timestamp }}.txt"
+        
+    - name: Run full scan with all optional checks
+      ansible.builtin.shell:
+        cmd: "cd {{ repo_dest }} && {{ python_executable }} -m aur_check --full"
+      register: full_scan
+      ignore_errors: yes
+      
+    - name: Save full scan results
+      ansible.builtin.copy:
+        content: "{{ full_scan.stdout }}\n{{ full_scan.stderr }}"
+        dest: "{{ results_dir }}/02_full_scan_{{ timestamp }}.txt"
+        
+    - name: Refresh all campaign package lists
+      ansible.builtin.shell:
+        cmd: "cd {{ repo_dest }} && {{ python_executable }} -m aur_check --refresh --full"
+      register: refresh_campaigns
+      ignore_errors: yes
+      timeout: 300
+      
+    - name: Save refresh campaigns results
+      ansible.builtin.copy:
+        content: "{{ refresh_campaigns.stdout }}\n{{ refresh_campaigns.stderr }}"
+        dest: "{{ results_dir }}/03_refresh_campaigns_{{ timestamp }}.txt"
+        
+    - name: Output scan results as JSON
+      ansible.builtin.shell:
+        cmd: "cd {{ repo_dest }} && {{ python_executable }} -m aur_check --json"
+      register: json_output
+      ignore_errors: yes
+      
+    - name: Save JSON results
+      ansible.builtin.copy:
+        content: "{{ json_output.stdout }}"
+        dest: "{{ results_dir }}/04_scan_results_{{ timestamp }}.json"
+      when: json_output.stdout | length > 0
+      
+    - name: List configured campaigns
+      ansible.builtin.shell:
+        cmd: "cd {{ repo_dest }} && {{ python_executable }} -m aur_check --list-campaigns"
+      register: list_campaigns
+      ignore_errors: yes
+      
+    - name: Save campaigns list
+      ansible.builtin.copy:
+        content: "{{ list_campaigns.stdout }}\n{{ list_campaigns.stderr }}"
+        dest: "{{ results_dir }}/05_list_campaigns_{{ timestamp }}.txt"
+        
+    - name: List campaigns in JSON format
+      ansible.builtin.shell:
+        cmd: "cd {{ repo_dest }} && {{ python_executable }} -m aur_check --list-campaigns --json"
+      register: json_campaigns
+      ignore_errors: yes
+      
+    - name: Save JSON campaigns list
+      ansible.builtin.copy:
+        content: "{{ json_campaigns.stdout }}"
+        dest: "{{ results_dir }}/06_campaigns_list_{{ timestamp }}.json"
+      when: json_campaigns.stdout | length > 0
+      
+    - name: Refresh campaigns.json from upstream (dry-run)
+      ansible.builtin.shell:
+        cmd: "cd {{ repo_dest }} && {{ python_executable }} -m aur_check --refresh-campaigns --dry-run"
+      register: refresh_dry_run
+      ignore_errors: yes
+      
+    - name: Save refresh dry-run results
+      ansible.builtin.copy:
+        content: "{{ refresh_dry_run.stdout }}\n{{ refresh_dry_run.stderr }}"
+        dest: "{{ results_dir }}/07_refresh_campaigns_dryrun_{{ timestamp }}.txt"
+        
+    - name: Check bun cache specifically
+      ansible.builtin.shell:
+        cmd: "cd {{ repo_dest }} && {{ python_executable }} -m aur_check --check-bun-cache"
+      register: bun_cache_check
+      ignore_errors: yes
+      
+    - name: Save bun cache results
+      ansible.builtin.copy:
+        content: "{{ bun_cache_check.stdout }}\n{{ bun_cache_check.stderr }}"
+        dest: "{{ results_dir }}/08_bun_cache_check_{{ timestamp }}.txt"
+        
+    - name: Check yarn cache specifically
+      ansible.builtin.shell:
+        cmd: "cd {{ repo_dest }} && {{ python_executable }} -m aur_check --check-yarn-cache"
+      register: yarn_cache_check
+      ignore_errors: yes
+      
+    - name: Save yarn cache results
+      ansible.builtin.copy:
+        content: "{{ yarn_cache_check.stdout }}\n{{ yarn_cache_check.stderr }}"
+        dest: "{{ results_dir }}/09_yarn_cache_check_{{ timestamp }}.txt"
+        
+    - name: Check pnpm cache specifically
+      ansible.builtin.shell:
+        cmd: "cd {{ repo_dest }} && {{ python_executable }} -m aur_check --check-pnpm-cache"
+      register: pnpm_cache_check
+      ignore_errors: yes
+      
+    - name: Save pnpm cache results
+      ansible.builtin.copy:
+        content: "{{ pnpm_cache_check.stdout }}\n{{ pnpm_cache_check.stderr }}"
+        dest: "{{ results_dir }}/10_pnpm_cache_check_{{ timestamp }}.txt"
+        
+    - name: Cross-campaign scan (all-time)
+      ansible.builtin.shell:
+        cmd: "cd {{ repo_dest }} && {{ python_executable }} -m aur_check --all-time"
+      register: all_time_scan
+      ignore_errors: yes
+      
+    - name: Save all-time scan results
+      ansible.builtin.copy:
+        content: "{{ all_time_scan.stdout }}\n{{ all_time_scan.stderr }}"
+        dest: "{{ results_dir }}/11_all_time_scan_{{ timestamp }}.txt"
+        
+    - name: Custom date range scan
+      ansible.builtin.shell:
+        cmd: "cd {{ repo_dest }} && START_DATE=2026-06-09 END_DATE=2026-06-28 {{ python_executable }} -m aur_check"
+      register: custom_date_scan
+      ignore_errors: yes
+      environment:
+        START_DATE: "2026-06-09"
+        END_DATE: "2026-06-28"
+      
+    - name: Save custom date range results
+      ansible.builtin.copy:
+        content: "{{ custom_date_scan.stdout }}\n{{ custom_date_scan.stderr }}"
+        dest: "{{ results_dir }}/12_custom_date_range_{{ timestamp }}.txt"
+        
+    - name: Generate test summary report
+      ansible.builtin.template:
+        src: test_summary.j2
+        dest: "{{ results_dir }}/TEST_SUMMARY_{{ timestamp }}.md"
+      vars:
+        test_results:
+          - name: "Basic Malware Check"
+            rc: "{{ basic_check.rc }}"
+            status: "{{ 'PASSED' if basic_check.rc == 0 else 'FAILED' }}"
+          - name: "Full Scan with Optional Checks"
+            rc: "{{ full_scan.rc }}"
+            status: "{{ 'PASSED' if full_scan.rc == 0 else 'FAILED' }}"
+          - name: "Refresh Campaigns"
+            rc: "{{ refresh_campaigns.rc }}"
+            status: "{{ 'PASSED' if refresh_campaigns.rc == 0 else 'FAILED' }}"
+          - name: "JSON Output"
+            rc: "{{ json_output.rc }}"
+            status: "{{ 'PASSED' if json_output.rc == 0 else 'FAILED' }}"
+          - name: "List Campaigns"
+            rc: "{{ list_campaigns.rc }}"
+            status: "{{ 'PASSED' if list_campaigns.rc == 0 else 'FAILED' }}"
+          - name: "Bun Cache Check"
+            rc: "{{ bun_cache_check.rc }}"
+            status: "{{ 'PASSED' if bun_cache_check.rc == 0 else 'FAILED' }}"
+          - name: "Yarn Cache Check"
+            rc: "{{ yarn_cache_check.rc }}"
+            status: "{{ 'PASSED' if yarn_cache_check.rc == 0 else 'FAILED' }}"
+          - name: "pnpm Cache Check"
+            rc: "{{ pnpm_cache_check.rc }}"
+            status: "{{ 'PASSED' if pnpm_cache_check.rc == 0 else 'FAILED' }}"
+          - name: "All-Time Cross-Campaign Scan"
+            rc: "{{ all_time_scan.rc }}"
+            status: "{{ 'PASSED' if all_time_scan.rc == 0 else 'FAILED' }}"
+          - name: "Custom Date Range Scan"
+            rc: "{{ custom_date_scan.rc }}"
+            status: "{{ 'PASSED' if custom_date_scan.rc == 0 else 'FAILED' }}"
+        
+    - name: Display final summary
+      ansible.builtin.debug:
+        msg: |
+          ===== AUR MALWARE CHECK TEST SUITE COMPLETED =====
+          
+          Results saved to: {{ results_dir }}
+          Timestamp: {{ timestamp }}
+          
+          Test Summary:
+            - Basic Check: {{ 'PASSED ✓' if basic_check.rc == 0 else 'FAILED ✗' }}
+            - Full Scan: {{ 'PASSED ✓' if full_scan.rc == 0 else 'FAILED ✗' }}
+            - Refresh Campaigns: {{ 'PASSED ✓' if refresh_campaigns.rc == 0 else 'FAILED ✗' }}
+            - JSON Output: {{ 'PASSED ✓' if json_output.rc == 0 else 'FAILED ✗' }}
+            - List Campaigns: {{ 'PASSED ✓' if list_campaigns.rc == 0 else 'FAILED ✗' }}
+            - Bun Cache: {{ 'PASSED ✓' if bun_cache_check.rc == 0 else 'FAILED ✗' }}
+            - Yarn Cache: {{ 'PASSED ✓' if yarn_cache_check.rc == 0 else 'FAILED ✗' }}
+            - pnpm Cache: {{ 'PASSED ✓' if pnpm_cache_check.rc == 0 else 'FAILED ✗' }}
+            - All-Time Scan: {{ 'PASSED ✓' if all_time_scan.rc == 0 else 'FAILED ✗' }}
+            - Custom Date Range: {{ 'PASSED ✓' if custom_date_scan.rc == 0 else 'FAILED ✗' }}
+          
+          All results have been saved with timestamps for comparison.
+          
