@@ -60,13 +60,13 @@ jobs:
 
       - name: Lint playbooks
         run: |
-             cd ansible/
+             cd ansible/hardening/archlinux
              ansible-lint harden.yml
              ansible-lint desktop.yml
 
       - name: Syntax check harden.yml
         run: |
-             cd /home/runner/work/iso-builder/iso-builder/ansible/harden/archlinux/
+             cd ansible/hardening/archlinux/
              ansible-playbook \
                -c local \
                harden.yml \
@@ -74,7 +74,7 @@ jobs:
 
       - name: Syntax check desktop.yml
         run: |
-             cd /home/runner/work/iso-builder/iso-builder/ansible/harden/archlinux
+             cd ansible/harden/archlinux
              ansible-playbook \
                -c local \
                desktop.yml \
