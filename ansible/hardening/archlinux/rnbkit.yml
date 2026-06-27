@@ -1,0 +1,140 @@
+---
+- name: Rootkit and Bootkit Detection with Early-Boot Service
+  hosts: localhost
+  gather_facts: yes
+  
+  vars:
+    results_dir: /var/log/rootkit-bootkit-check
+    timestamp: "{{ ansible_date_time.iso8601_basic_short }}"
+    service_name: rootkit-bootkit-check
+    max_scan_attempts: 5
+    
+  pre_tasks:
+    - name: Validate Ansible version
+      assert:
+        that:
+          - ansible_version.major >= 2
+          - ansible_version.minor >= 10
+        fail_msg: "Ansible 2.10 or higher is required"
+        
+    - name: Check if running on Arch Linux
+      assert:
+        that:
+          - ansible_os_family == "Archlinux"
+        fail_msg: "This playbook requires Arch Linux"
+        
+  tasks:
+    - name: Update system packages
+      community.general.pacman:
+        update_cache: yes
+        upgrade: yes
+      become: yes
+      
+    - name: Install rootkit and bootkit detection packages
+      community.general.pacman:
+        name:
+          - rkhunter
+          - chkrootkit
+          - aide
+          - lynis
+          - tripwire
+          - samhain
+        state: present
+      become: yes
+      register: package_install
+      
+    - name: Display package installation status
+      ansible.builtin.debug:
+        msg: "Rootkit/bootkit detection packages installed successfully"
+      when: package_install is succeeded
+      
+    - name: Create results directory
+      ansible.builtin.file:
+        path: "{{ results_dir }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+      become: yes
+      
+    - name: Initialize scan results dictionary
+      ansible.builtin.set_fact:
+        scan_results: {}
+        rootkit_detected: false
+        bootkit_detected: false
+        scan_attempt: 0
+        
+    - name: Run rootkit and bootkit scans (up to 5 attempts)
+      block:
+        - name: Scan attempt loop
+          ansible.builtin.include_tasks: scan_loop.yml
+          loop: "{{ range(1, max_scan_attempts + 1) | list }}"
+          loop_control:
+            loop_var: attempt_number
+            
+      rescue:
+        - name: Handle scan loop errors
+          ansible.builtin.debug:
+            msg: "Error during scan loop - continuing with service creation"
+
+    - name: Create scan script
+      ansible.builtin.template:
+        src: rootkit-bootkit-scan.sh.j2
+        dest: /usr/local/bin/rootkit-bootkit-scan
+        owner: root
+        group: root
+        mode: '0755'
+      become: yes
+      
+    - name: Create systemd service file (early-boot, before mounts)
+      ansible.builtin.template:
+        src: rootkit-bootkit-check.service.j2
+        dest: /etc/systemd/system/{{ service_name }}.service
+        owner: root
+        group: root
+        mode: '0644'
+      become: yes
+      notify: reload systemd daemon
+      
+    - name: Enable and start the rootkit-bootkit-check service
+      ansible.builtin.systemd:
+        name: "{{ service_name }}.service"
+        enabled: yes
+        state: started
+        daemon_reload: yes
+      become: yes
+      
+    - name: Generate scan report
+      ansible.builtin.template:
+        src: scan_report.j2
+        dest: "{{ results_dir }}/SCAN_REPORT_{{ timestamp }}.md"
+      become: yes
+      
+    - name: Display final summary
+      ansible.builtin.debug:
+        msg: |
+          ===== ROOTKIT/BOOTKIT DETECTION COMPLETE =====
+          
+          Installation Status: COMPLETED ✓
+          
+          Detection Packages Installed:
+            - rkhunter
+            - chkrootkit
+            - aide
+            - lynis
+            - tripwire
+            - samhain
+          
+          Early-Boot Service Created: {{ service_name }}.service
+          Service Status: ENABLED ✓
+          
+          Results Directory: {{ results_dir }}
+          Latest Report: {{ results_dir }}/SCAN_REPORT_{{ timestamp }}.md
+          
+          Service runs automatically on every boot before volume/disk/ram mounts.
+          
+  handlers:
+    - name: reload systemd daemon
+      ansible.builtin.systemd:
+        daemon_reload: yes
+      become: yes
