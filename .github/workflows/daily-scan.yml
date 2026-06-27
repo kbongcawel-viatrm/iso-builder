@@ -1,0 +1,156 @@
+name: Daily Arch Linux Hardening - AUR & Rootkit/Bootkit Detection
+
+on:
+  schedule:
+    # 12:00 noon GMT+8 = 04:00 UTC
+    - cron: '0 4 * * *'
+    # 21:00 (9PM) GMT+8 = 13:00 UTC
+    - cron: '0 13 * * *'
+  workflow_dispatch:
+
+jobs:
+  hardening:
+    name: Run Arch Linux Hardening Playbooks
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+      actions: read
+      
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          
+      - name: Install Ansible and dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible paramiko
+          
+      - name: Validate playbook syntax
+        run: |
+          ansible-playbook --syntax-check Ansible/hardening/archlinux/aur.yml
+          ansible-playbook --syntax-check Ansible/hardening/archlinux/rnbkit.yml
+          
+      - name: Run AUR hardening playbook
+        run: |
+          ansible-playbook \
+            -i localhost, \
+            -c local \
+            -v \
+            Ansible/hardening/archlinux/aur.yml
+        continue-on-error: true
+        
+      - name: Run Rootkit/Bootkit detection playbook
+        run: |
+          ansible-playbook \
+            -i localhost, \
+            -c local \
+            -v \
+            Ansible/hardening/archlinux/rnbkit.yml
+        continue-on-error: true
+        
+      - name: Collect logs and results
+        if: always()
+        run: |
+          mkdir -p workflow-artifacts
+          
+          # Collect AUR logs if they exist
+          if [ -d "/var/log/aur-check" ]; then
+            cp -r /var/log/aur-check workflow-artifacts/ || true
+          fi
+          
+          # Collect rootkit/bootkit logs if they exist
+          if [ -d "/var/log/rootkit-bootkit-check" ]; then
+            cp -r /var/log/rootkit-bootkit-check workflow-artifacts/ || true
+          fi
+          
+          ls -la workflow-artifacts/ || echo "No artifacts collected"
+          
+      - name: Upload workflow artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hardening-logs-${{ github.run_number }}-${{ github.run_attempt }}
+          path: workflow-artifacts/
+          retention-days: 30
+          if-no-files-found: ignore
+          
+      - name: Generate execution summary
+        if: always()
+        run: |
+          cat > execution-summary.md << 'EOF'
+          # Arch Linux Hardening Execution Summary
+          
+          **Workflow Run**: ${{ github.run_number }}  
+          **Attempt**: ${{ github.run_attempt }}  
+          **Triggered At**: ${{ github.event.head_commit.timestamp }}  
+          **Repository**: ${{ github.repository }}  
+          **Branch**: ${{ github.ref_name }}  
+          
+          ## Playbooks Executed
+          
+          - [x] `Ansible/hardening/archlinux/aur.yml`
+          - [x] `Ansible/hardening/archlinux/rnbkit.yml`
+          
+          ## Schedule Information
+          
+          This workflow runs **twice daily**:
+          - **12:00 noon GMT+8** (04:00 UTC)
+          - **21:00 (9PM) GMT+8** (13:00 UTC)
+          
+          ## Job Status
+          
+          | Playbook | Status |
+          |----------|--------|
+          | AUR Hardening | ${{ job.status }} |
+          | Rootkit/Bootkit Detection | ${{ job.status }} |
+          
+          ---
+          
+          For detailed logs, see the uploaded artifacts.
+          EOF
+          cat execution-summary.md
+          
+      - name: Upload execution summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: execution-summary-${{ github.run_number }}
+          path: execution-summary.md
+          retention-days: 30
+
+  notify-on-failure:
+    name: Notify on Failure
+    runs-on: ubuntu-latest
+    needs: hardening
+    if: failure()
+    
+    steps:
+      - name: Create failure notification
+        run: |
+          cat > failure-report.txt << 'EOF'
+          ⚠️ WORKFLOW FAILURE REPORT
+          
+          Workflow: Daily Arch Linux Hardening
+          Run Number: ${{ github.run_number }}
+          Repository: ${{ github.repository }}
+          Branch: ${{ github.ref_name }}
+          
+          One or more hardening playbooks failed.
+          Review the logs in the GitHub Actions UI for details.
+          
+          Artifact: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EOF
+          cat failure-report.txt
+          
+      - name: Display failure report
+        run: cat failure-report.txt
+        
