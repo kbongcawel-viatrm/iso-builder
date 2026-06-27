@@ -95,17 +95,12 @@ jobs:
       - name: Install dependencies
         run: |
           set -euxo pipefail
-          pip install ansible
+          sudo pacman -Syu ansible
 
           ansible-galaxy collection install \
             community.general
 
-      - name: Verify local runner
-        run: |
-          pwd
-          uname -a
-          whoami
-          ansible --version
+          echo "Running on $(ansible -V)"
 
       - name: Run hardening playbook
         run: |
