@@ -104,7 +104,7 @@ jobs:
 
       - name: Run hardening playbook
         run: |
-          EXTRA=""
+          EXTRA="--ask-become-password"
 
           if [ "${{ inputs.check_mode }}" = "true" ]; then
             EXTRA="--check"
@@ -115,11 +115,11 @@ jobs:
             -c local \
             harden.yml \
             --diff \
-          $EXTRA
+          $EXTRA 
 
       - name: Run desktop playbook
         run: |
-          EXTRA=""
+          EXTRA="--ask-become-password"
 
           if [ "${{ inputs.check_mode }}" = "true" ]; then
             EXTRA="--check"
