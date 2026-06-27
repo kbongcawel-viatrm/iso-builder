@@ -1,0 +1,152 @@
+---
+- name: Run scan attempt {{ attempt_number }}
+  block:
+    - name: Create scan directory for attempt {{ attempt_number }}
+      ansible.builtin.file:
+        path: "{{ results_dir }}/attempt_{{ attempt_number }}"
+        state: directory
+        mode: '0755'
+        owner: root
+        group: root
+      become: yes
+      
+    - name: Run rkhunter scan
+      ansible.builtin.shell:
+        cmd: "rkhunter --check --skip-keypress --report-warnings-only 2>&1"
+      register: rkhunter_scan
+      ignore_errors: yes
+      timeout: 600
+      become: yes
+      
+    - name: Save rkhunter results
+      ansible.builtin.copy:
+        content: |
+          === RKHUNTER SCAN - ATTEMPT {{ attempt_number }} ===
+          Timestamp: {{ ansible_date_time.iso8601 }}
+          
+          {{ rkhunter_scan.stdout }}
+          {{ rkhunter_scan.stderr }}
+        dest: "{{ results_dir }}/attempt_{{ attempt_number }}/rkhunter_scan.txt"
+        owner: root
+        group: root
+        mode: '0644'
+      become: yes
+      
+    - name: Check rkhunter for rootkit detection
+      ansible.builtin.set_fact:
+        rkhunter_detected: "{{ 'Warning:' in rkhunter_scan.stdout or 'INFECTED' in rkhunter_scan.stdout }}"
+        
+    - name: Run chkrootkit scan
+      ansible.builtin.shell:
+        cmd: "chkrootkit 2>&1"
+      register: chkrootkit_scan
+      ignore_errors: yes
+      timeout: 600
+      become: yes
+      
+    - name: Save chkrootkit results
+      ansible.builtin.copy:
+        content: |
+          === CHKROOTKIT SCAN - ATTEMPT {{ attempt_number }} ===
+          Timestamp: {{ ansible_date_time.iso8601 }}
+          
+          {{ chkrootkit_scan.stdout }}
+          {{ chkrootkit_scan.stderr }}
+        dest: "{{ results_dir }}/attempt_{{ attempt_number }}/chkrootkit_scan.txt"
+        owner: root
+        group: root
+        mode: '0644'
+      become: yes
+      
+    - name: Check chkrootkit for rootkit detection
+      ansible.builtin.set_fact:
+        chkrootkit_detected: "{{ 'INFECTED' in chkrootkit_scan.stdout or 'Warning' in chkrootkit_scan.stdout }}"
+        
+    - name: Run AIDE initialization and check
+      ansible.builtin.shell:
+        cmd: "aide --init && aide --check 2>&1"
+      register: aide_scan
+      ignore_errors: yes
+      timeout: 600
+      become: yes
+      
+    - name: Save AIDE results
+      ansible.builtin.copy:
+        content: |
+          === AIDE SCAN - ATTEMPT {{ attempt_number }} ===
+          Timestamp: {{ ansible_date_time.iso8601 }}
+          
+          {{ aide_scan.stdout }}
+          {{ aide_scan.stderr }}
+        dest: "{{ results_dir }}/attempt_{{ attempt_number }}/aide_scan.txt"
+        owner: root
+        group: root
+        mode: '0644'
+      become: yes
+      
+    - name: Check AIDE for file integrity issues
+      ansible.builtin.set_fact:
+        aide_detected: "{{ 'changed' in aide_scan.stdout | lower or 'added' in aide_scan.stdout | lower }}"
+        
+    - name: Run Lynis audit
+      ansible.builtin.shell:
+        cmd: "lynis audit system quiet 2>&1"
+      register: lynis_scan
+      ignore_errors: yes
+      timeout: 600
+      become: yes
+      
+    - name: Save Lynis results
+      ansible.builtin.copy:
+        content: |
+          === LYNIS SECURITY AUDIT - ATTEMPT {{ attempt_number }} ===
+          Timestamp: {{ ansible_date_time.iso8601 }}
+          
+          {{ lynis_scan.stdout }}
+          {{ lynis_scan.stderr }}
+        dest: "{{ results_dir }}/attempt_{{ attempt_number }}/lynis_scan.txt"
+        owner: root
+        group: root
+        mode: '0644'
+      become: yes
+      
+    - name: Check Lynis for rootkit warnings
+      ansible.builtin.set_fact:
+        lynis_detected: "{{ 'rootkit' in lynis_scan.stdout | lower or 'warning' in lynis_scan.stdout | lower }}"
+        
+    - name: Display attempt {{ attempt_number }} results
+      ansible.builtin.debug:
+        msg: |
+          ===== SCAN ATTEMPT {{ attempt_number }} =====
+          
+          rkhunter: {{ 'DETECTED ⚠' if rkhunter_detected else 'CLEAN ✓' }}
+          chkrootkit: {{ 'DETECTED ⚠' if chkrootkit_detected else 'CLEAN ✓' }}
+          AIDE: {{ 'DETECTED ⚠' if aide_detected else 'CLEAN ✓' }}
+          Lynis: {{ 'DETECTED ⚠' if lynis_detected else 'CLEAN ✓' }}
+          
+    - name: Update scan results
+      ansible.builtin.set_fact:
+        scan_results: "{{ scan_results | combine({
+          'attempt_' + attempt_number | string: {
+            'rkhunter': rkhunter_detected,
+            'chkrootkit': chkrootkit_detected,
+            'aide': aide_detected,
+            'lynis': lynis_detected
+          }
+        }) }}"
+        rootkit_detected: "{{ rootkit_detected or rkhunter_detected or chkrootkit_detected or lynis_detected }}"
+        bootkit_detected: "{{ bootkit_detected or aide_detected }}"
+        
+    - name: Stop scanning if no threats detected and attempt 2+ reached
+      ansible.builtin.set_fact:
+        max_scan_attempts: "{{ attempt_number }}"
+      when:
+        - attempt_number | int >= 2
+        - not rootkit_detected
+        - not bootkit_detected
+        
+  rescue:
+    - name: Handle scan attempt {{ attempt_number }} error
+      ansible.builtin.debug:
+        msg: "Error during scan attempt {{ attempt_number }} - continuing to next attempt"
+        
