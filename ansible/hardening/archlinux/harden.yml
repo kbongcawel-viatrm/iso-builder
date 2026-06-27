@@ -12,7 +12,7 @@
       community.general.pacman:
         name: >-
           {{
-           ['apparmor', 'apparmor-utils', 'audit', 'lynis']
+           ['apparmor', 'ufw', 'audit', 'lynis']
            + (['linux-hardened', 'linux-hardened-headers'] if install_linux_hardened else [])
           }}
         state: present
@@ -54,3 +54,11 @@
 
     - command: grub-mkconfig -o /boot/grub/grub.cfg
       changed_when: true
+
+    - command: ufw logging high && ufw default deny all incoming && ufw allow 443/tcp && ufw allow 53/tcp && ufw allow 53/udp && ufw enable && ufw status verbose
+      changed_when: true
+
+    - systemd:
+        name: ufw.service
+        enabled: true
+        state: started
