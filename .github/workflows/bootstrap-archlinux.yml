@@ -115,7 +115,7 @@ jobs:
             EXTRA="--check"
           fi
           
-          cd $ {{ github.workspace }}/ansible/harden/archlinux
+          cd $ {{ github.workspace }}/ansible/hardening/archlinux
           ansible-playbook \
             -c local \
             harden.yml \
@@ -130,7 +130,7 @@ jobs:
             EXTRA="--check"
           fi
           
-          cd $ {{ github.workspace }}/ansible/harden/archlinux
+          cd $ {{ github.workspace }}/ansible/hardening/archlinux
           ansible-playbook \
            -c local \
            desktop.yml \
