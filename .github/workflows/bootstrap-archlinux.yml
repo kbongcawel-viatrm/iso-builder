@@ -87,7 +87,7 @@ jobs:
         run: |
            set -euxo pipefail
            if ! command -V python >/dev/null 2>&1; then
-             sudo pacman -Syu python
+             sudo pacman -Syu --noconfirm python
            else
              echo "Using $(python -V)"
            fi
@@ -95,7 +95,7 @@ jobs:
       - name: Install dependencies
         run: |
           set -euxo pipefail
-          sudo pacman -Syu ansible
+          sudo pacman -Syu --noconfirm ansible
 
           ansible-galaxy collection install \
             community.general
