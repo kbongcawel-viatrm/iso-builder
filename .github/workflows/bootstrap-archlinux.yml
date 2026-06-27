@@ -86,7 +86,7 @@ jobs:
       - name: Setup Python
         run: |
            set -euxo pipefail
-           if ! command -V python >/dev/null 2>&1; then
+           if ! command -v python >/dev/null 2>&1; then
              sudo pacman -Syu --noconfirm python
            else
              echo "Using $(python -V)"
@@ -95,19 +95,22 @@ jobs:
       - name: Install dependencies
         run: |
           set -euxo pipefail
+          
+          if ! command -v ansible > /dev/null 2>&1; then
           sudo pacman -Syu --noconfirm ansible
-
+          else
+            echo "Using $(ansible --version)"
+          fi
+          
           ansible-galaxy collection install \
             community.general
-
-          echo "Running on $(ansible -V)"
 
       - name: Run hardening playbook
         run: |
           EXTRA="--ask-become-pass"
 
           if [ "${{ inputs.check_mode }}" = "true" ]; then
-            EXTRA="--check"
+            EXTRA="--ask-become-pass --check"
           fi
           
           cd "${{ github.workspace }}/ansible/hardening/archlinux"
