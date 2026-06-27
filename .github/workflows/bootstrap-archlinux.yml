@@ -132,7 +132,13 @@ jobs:
            desktop.yml \
            --diff -e "install_linux_hardened=true enable_apparmor=true lock_modules_after_boot=false" \
           $EXTRA
-
       - name: Show completion
         run: |
           echo "Playbook deployment finished"
+     
+      - name: Get Secureboot Status
+        run: |
+              set -euxo pipefail
+              sudo mokutil --sb-state
+              bootctl status
+              echo "Done"
