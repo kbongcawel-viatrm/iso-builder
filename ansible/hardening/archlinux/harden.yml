@@ -71,10 +71,10 @@
     - command: ufw allow 53/udp
       changed_when: true
 
-    - command: ufw --force enable
+    - command: ufw enable verbose
       changed_when: true
 
     - systemd:
       name: ufw.service
-      enabled: true
-      state: started
+        enabled: true
+        state: started
