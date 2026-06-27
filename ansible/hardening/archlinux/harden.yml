@@ -35,7 +35,7 @@
         name: apparmor.service
         enabled: true
         state: started
-      when: enable_apparmor
+      when: enable_apparmor | bool
 
     - template:
         src: templates/kernel-hardening.service.j2
@@ -47,6 +47,7 @@
     - systemd:
         name: kernel-hardening.service
         enabled: true
+        state: started
 
     - template:
         src: templates/grub-hardening.j2
@@ -54,11 +55,26 @@
 
     - command: grub-mkconfig -o /boot/grub/grub.cfg
       changed_when: true
+      
+    - command: ufw logging high
+      changed_when: true
 
-    - command: ufw logging high && ufw default deny all incoming && ufw allow 443/tcp && ufw allow 53/tcp && ufw allow 53/udp && ufw enable && ufw status verbose
+    - command: ufw default deny incoming
+      changed_when: true
+
+    - command: ufw allow 443/tcp
+      changed_when: true
+
+    - command: ufw allow 53/tcp
+      changed_when: true
+
+    - command: ufw allow 53/udp
+      changed_when: true
+
+    - command: ufw --force enable
       changed_when: true
 
     - systemd:
-        name: ufw.service
-        enabled: true
-        state: started
+      name: ufw.service
+      enabled: true
+      state: started
