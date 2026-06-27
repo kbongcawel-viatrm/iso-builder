@@ -114,7 +114,7 @@ jobs:
           ansible-playbook \
             -c local \
             harden.yml \
-            --diff \
+            --diff -e "install_linux_hardened=true enable_apparmor=true lock_modules_after_boot=false"\
           $EXTRA 
 
       - name: Run desktop playbook
@@ -129,7 +129,7 @@ jobs:
           ansible-playbook \
            -c local \
            desktop.yml \
-           --diff \
+           --diff -e "install_linux_hardened=true enable_apparmor=true lock_modules_after_boot=false" \
           $EXTRA
 
       - name: Show completion
