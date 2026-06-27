@@ -110,22 +110,23 @@ jobs:
             EXTRA="--check"
           fi
           
-          cd ${{ github.workspace }}/ansible/hardening/archlinux
+          cd "${{ github.workspace }}/ansible/hardening/archlinux"
           ansible-playbook \
             -c local \
             harden.yml \
-            --diff -e "install_linux_hardened=true enable_apparmor=true lock_modules_after_boot=false"\
+            --diff -e "install_linux_hardened=true enable_apparmor=true lock_modules_after_boot=false" \
           $EXTRA 
 
       - name: Run desktop playbook
         run: |
           EXTRA="--ask-become-pass"
 
+
           if [ "${{ inputs.check_mode }}" = "true" ]; then
             EXTRA="--check"
           fi
           
-          cd ${{ github.workspace }}/ansible/hardening/archlinux
+          cd "${{ github.workspace }}/ansible/hardening/archlinux"
           ansible-playbook \
            -c local \
            desktop.yml \
