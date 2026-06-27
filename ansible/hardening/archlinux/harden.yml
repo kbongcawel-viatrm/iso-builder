@@ -75,6 +75,7 @@
       changed_when: true
 
     - systemd:
-      name: ufw.service
+        name: ufw.service
         enabled: true
         state: started
+    
