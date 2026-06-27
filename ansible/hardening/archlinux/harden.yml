@@ -71,7 +71,7 @@
     - command: ufw allow 53/udp
       changed_when: true
 
-    - command: ufw enable verbose
+    - command: ufw --force enable verbose
       changed_when: true
 
     - systemd:
