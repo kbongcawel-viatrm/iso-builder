@@ -10,15 +10,13 @@
   tasks:
     - name: Install hardening packages
       community.general.pacman:
-        name:
-          - apparmor
-          - apparmor-utils
-          - audit
-          - lynis
-          - "{{ 'linux-hardened' if install_linux_hardened else omit }}"
-          - "{{ 'linux-hardened-headers' if install_linux_hardened else omit }}"
+        name: >-
+          {{
+           ['apparmor', 'apparmor-utils', 'audit', 'lynis']
+           + (['linux-hardened', 'linux-hardened-headers'] if install_linux_hardened else [])
+          }}
         state: present
-
+        
     - template:
         src: templates/99-kernel-hardening.conf.j2
         dest: /etc/sysctl.d/99-kernel-hardening.conf
