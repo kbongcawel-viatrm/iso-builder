@@ -5,7 +5,7 @@
   become: true
 
   vars_files:
-    - group_vars/all.yml
+    - groupvars/all.yml
 
   tasks:
     - name: Install hardening packages
