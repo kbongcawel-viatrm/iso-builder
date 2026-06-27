@@ -1,0 +1,44 @@
+# Rootkit and Bootkit Detection Report
+
+**Generated**: {{ ansible_date_time.iso8601 }}  
+**Host**: {{ ansible_hostname }}  
+**OS**: {{ ansible_distribution }} {{ ansible_distribution_version }}  
+
+## Packages Installed
+
+- rkhunter - Rootkit Hunter detection tool
+- chkrootkit - Rootkit Checker tool
+- aide - File integrity monitoring
+- lynis - Security auditing tool
+- tripwire - File integrity monitoring (backup)
+- samhain - Intrusion detection system (backup)
+
+## Scan Results Summary
+
+### Overall Detection Status
+- Rootkit Detected: {% if rootkit_detected %}YES ⚠{% else %}NO ✓{% endif %}
+- Bootkit/File Integrity Issues Detected: {% if bootkit_detected %}YES ⚠{% else %}NO ✓{% endif %}
+
+### Scan Attempts Completed
+Total attempts: {{ scan_attempt | default('See logs for details') }}
+
+{% for attempt_key, attempt_data in scan_results.items() %}
+#### {{ attempt_key.replace('_', ' ').title() }}
+- rkhunter: {% if attempt_data.rkhunter %}DETECTED ⚠{% else %}CLEAN ✓{% endif %}
+- chkrootkit: {% if attempt_data.chkrootkit %}DETECTED ⚠{% else %}CLEAN ✓{% endif %}
+- AIDE: {% if attempt_data.aide %}DETECTED ⚠{% else %}CLEAN ✓{% endif %}
+- Lynis: {% if attempt_data.lynis %}DETECTED ⚠{% else %}CLEAN ✓{% endif %}
+
+{% endfor %}
+
+## Early-Boot Service Configuration
+
+**Service Name**: rootkit-bootkit-check.service  
+**Status**: Enabled and started  
+**Startup Timing**: Runs before local-fs.target (before volume/disk/ram mounts)  
+**Frequency**: Every system boot  
+**Scan Script**: /usr/local/bin/rootkit-bootkit-scan  
+**Log Location**: /var/log/rootkit-bootkit-check/
+
+## Scan Log Locations
+
