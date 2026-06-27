@@ -54,7 +54,7 @@ jobs:
 
       - name: Syntax check desktop.yml
         run: |
-             cd ansible/harden/archlinux
+             cd ansible/hardening/archlinux
              ansible-playbook \
                -c local \
                desktop.yml \
