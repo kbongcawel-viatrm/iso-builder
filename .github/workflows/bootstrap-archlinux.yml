@@ -84,9 +84,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-           python-version: "3.12"
+        run: |
+           set -euxo pipefail
+           if ! command -V python >/dev/null 2>&1; then
+             sudo pacman -Syu python
+           else
+             echo "Using $(python -V)"
+           fi
 
       - name: Install dependencies
         run: |
