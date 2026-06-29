@@ -23,6 +23,11 @@ jobs:
         with:
           fetch-depth: 1
           
+      - name: Install common dependencies
+        run: |
+          sudo pacman -Syu pip
+          # add more packages here if needed 
+          
       - name: Install Ansible and dependencies
         run: |
           python -m pip install --upgrade pip
