@@ -32,25 +32,28 @@ jobs:
           
       - name: Validate playbook syntax
         run: |
-          ansible-playbook --syntax-check Ansible/hardening/archlinux/aur.yml
-          ansible-playbook --syntax-check Ansible/hardening/archlinux/rnbkit.yml
+          cd ansible/hardening/archlinux/
+          ansible-playbook --syntax-check aur.yml
+          ansible-playbook --syntax-check rnbkit.yml
           
       - name: Run AUR hardening playbook
         run: |
+          cd ansible/hardening/archlinux/
           ansible-playbook \
             -i localhost, \
             -c local \
             -v \
-            Ansible/hardening/archlinux/aur.yml
+            aur.yml
         continue-on-error: true
         
       - name: Run Rootkit/Bootkit detection playbook
         run: |
+          cd ansible/hardening/archlinux/
           ansible-playbook \
             -i localhost, \
             -c local \
             -v \
-            Ansible/hardening/archlinux/rnbkit.yml
+            rnbkit.yml
         continue-on-error: true
         
       - name: Collect logs and results
