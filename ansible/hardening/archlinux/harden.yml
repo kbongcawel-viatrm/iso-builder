@@ -56,26 +56,26 @@
     #- command: grub-mkconfig -o /boot/grub/grub.cfg
     #  changed_when: true
       
-    - command: ufw logging on
-      changed_when: true
+    #- command: ufw logging on
+    #  changed_when: true
 
-    - command: ufw default deny incoming
-      changed_when: true
+    #- command: ufw default deny incoming
+    # changed_when: true
 
-    - command: ufw allow 443/tcp
-      changed_when: true
+    #- command: ufw allow 443/tcp
+    #  changed_when: true
 
-    - command: ufw allow 53/tcp
-      changed_when: true
+    #- command: ufw allow 53/tcp
+    #  changed_when: true
 
-    - command: ufw allow 53/udp
-      changed_when: true
+    # - command: ufw allow 53/udp
+     #/ changed_when: true
 
     #- command: ufw --force enable verbose
     # changed_when: true
 
-    - systemd:
-        name: ufw.service
-        enabled: true
-        state: started
+    #- systemd:
+    #   name: ufw.service
+    #    enabled: true
+    #   state: started
     
