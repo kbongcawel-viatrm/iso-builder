@@ -28,7 +28,7 @@ jobs:
              set -euxo pipefail
 
              ansible-galaxy collection install \
-             paramiko
+             community.general
           
       - name: Validate playbook syntax
         run: |
